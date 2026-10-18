@@ -1,0 +1,28 @@
+﻿{
+    "id":  1,
+    "jsonrpc":  "2.0",
+    "result":  {
+                   "content":  [
+                                   {
+                                       "text":  "{\"name\":\"projects/530154387306574953/screens/c15df7e06824421185593fa90777ebb9\",\"title\":\"Live Exam Simulator\",\"screenshot\":{\"name\":\"projects/530154387306574953/screens/c15df7e06824421185593fa90777ebb9/fileEntries/screenshot\",\"downloadUrl\":\"https://lh3.googleusercontent.com/aida/AEtjO1UcV4Of7lWi8WQYBuwFy2yqD82v9WewN7GPNEDa4P1f8Gc4LValONW6ScIjQliF-UsexbvGI-z0cxIIcHquAQhBpZcH4ODIZoej-ElJJbIiJTPdomqVX10Zc08ZJaRLmKfcUsuKHwyAluAqrGWjgJff61hg5lrwu23o_KvKWef5jVDNfFqgMQZQdzs2QN9Co65FGqieVVNqYMc7HvBJRZ-tWh9AJW8YTIX5vxytUwrRYdDamEuwzyfavw\"},\"htmlCode\":{\"name\":\"projects/530154387306574953/screens/c15df7e06824421185593fa90777ebb9/fileEntries/html\",\"downloadUrl\":\"https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJwEgxzdGl0Y2hfZmlsZXMaYAosc3RpdGNoX2h0bWxfMDAwNjVkNTE1OWFmYzc5NzA1ZjEwNGRlODYwNDIxYmMSCxIHELXKr9eJBxgBkgEiCgpwcm9qZWN0X2lkEhRCEjUzMDE1NDM4NzMwNjU3NDk1Mw\u0026filename=\u0026opi=89354086\",\"mimeType\":\"text/html\"},\"width\":\"780\",\"height\":\"2120\",\"deviceType\":\"MOBILE\"}",
+                                       "type":  "text"
+                                   }
+                               ],
+                   "structuredContent":  {
+                                             "deviceType":  "MOBILE",
+                                             "height":  "2120",
+                                             "htmlCode":  {
+                                                              "downloadUrl":  "https://contribution.usercontent.google.com/download?c=CgthaWRhX2NvZGVmeBJwEgxzdGl0Y2hfZmlsZXMaYAosc3RpdGNoX2h0bWxfMDAwNjVkNTE1OWFmYzc5NzA1ZjEwNGRlODYwNDIxYmMSCxIHELXKr9eJBxgBkgEiCgpwcm9qZWN0X2lkEhRCEjUzMDE1NDM4NzMwNjU3NDk1Mw\u0026filename=\u0026opi=89354086",
+                                                              "mimeType":  "text/html",
+                                                              "name":  "projects/530154387306574953/screens/c15df7e06824421185593fa90777ebb9/fileEntries/html"
+                                                          },
+                                             "name":  "projects/530154387306574953/screens/c15df7e06824421185593fa90777ebb9",
+                                             "screenshot":  {
+                                                                "downloadUrl":  "https://lh3.googleusercontent.com/aida/AEtjO1UcV4Of7lWi8WQYBuwFy2yqD82v9WewN7GPNEDa4P1f8Gc4LValONW6ScIjQliF-UsexbvGI-z0cxIIcHquAQhBpZcH4ODIZoej-ElJJbIiJTPdomqVX10Zc08ZJaRLmKfcUsuKHwyAluAqrGWjgJff61hg5lrwu23o_KvKWef5jVDNfFqgMQZQdzs2QN9Co65FGqieVVNqYMc7HvBJRZ-tWh9AJW8YTIX5vxytUwrRYdDamEuwzyfavw",
+                                                                "name":  "projects/530154387306574953/screens/c15df7e06824421185593fa90777ebb9/fileEntries/screenshot"
+                                                            },
+                                             "title":  "Live Exam Simulator",
+                                             "width":  "780"
+                                         }
+               }
+}

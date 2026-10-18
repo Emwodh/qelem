@@ -1,0 +1,505 @@
+import {
+  SubjectModule,
+  FeatureItem,
+  GradeMastery,
+  NavItem,
+  FooterLinkGroup,
+  HowItWorksStep,
+  PricingPlan,
+  FAQItem,
+} from "@/types/landing";
+
+export const NAV_ITEMS: NavItem[] = [
+  { label: "Features", href: "#features" },
+  { label: "Curriculum", href: "#curriculum" },
+  { label: "How It Works", href: "#how-it-works" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "FAQ", href: "#faq" },
+];
+
+export const GRADE_MASTERY_STATS: GradeMastery[] = [
+  {
+    grade: "Grade 9",
+    label: "Foundation Concepts",
+    percentage: 92,
+    unitsCompleted: 24,
+    totalUnits: 26,
+    statusText: "Mastered",
+    color: "#10B981",
+  },
+  {
+    grade: "Grade 10",
+    label: "Core Principles",
+    percentage: 85,
+    unitsCompleted: 22,
+    totalUnits: 26,
+    statusText: "Strong",
+    color: "#10B981",
+  },
+  {
+    grade: "Grade 11",
+    label: "Advanced Theory",
+    percentage: 74,
+    unitsCompleted: 20,
+    totalUnits: 27,
+    statusText: "In Progress",
+    color: "#6366F1",
+  },
+  {
+    grade: "Grade 12",
+    label: "Matric Target Units",
+    percentage: 62,
+    unitsCompleted: 16,
+    totalUnits: 26,
+    statusText: "Action Needed",
+    color: "#F59E0B",
+  },
+];
+
+export const NATURAL_SCIENCE_SUBJECTS: SubjectModule[] = [
+  {
+    id: "math-nat",
+    name: "Mathematics (Natural)",
+    amharicName: "ሒሳብ",
+    stream: "natural",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 28,
+    pastQuestionsCount: 2850,
+    iconName: "Calculator",
+    badge: "High Weight",
+    highYieldTopics: [
+      "Calculus & Derivatives",
+      "Vectors & 3D Geometry",
+      "Matrices & Determinants",
+      "Sequences & Series",
+    ],
+    accentColor: "from-indigo-500/20 to-indigo-600/10",
+  },
+  {
+    id: "physics",
+    name: "Physics",
+    amharicName: "ፊዚክስ",
+    stream: "natural",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 26,
+    pastQuestionsCount: 2420,
+    iconName: "Atom",
+    badge: "Formula Heavy",
+    highYieldTopics: [
+      "Newtonian Mechanics",
+      "Electromagnetism & Induction",
+      "Wave Optics",
+      "Atomic & Modern Physics",
+    ],
+    accentColor: "from-blue-500/20 to-blue-600/10",
+  },
+  {
+    id: "chemistry",
+    name: "Chemistry",
+    amharicName: "ኬሚስትሪ",
+    stream: "natural",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 24,
+    pastQuestionsCount: 2150,
+    iconName: "FlaskConical",
+    badge: "Concept Driven",
+    highYieldTopics: [
+      "Organic Reaction Pathways",
+      "Chemical Equilibrium & Ka/Kb",
+      "Electrochemistry & Cells",
+      "Thermodynamics & Enthalpy",
+    ],
+    accentColor: "from-emerald-500/20 to-emerald-600/10",
+  },
+  {
+    id: "biology",
+    name: "Biology",
+    amharicName: "ስነ-ህይወት",
+    stream: "natural",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 24,
+    pastQuestionsCount: 2300,
+    iconName: "Dna",
+    badge: "Diagrams & Logic",
+    highYieldTopics: [
+      "Mendelian & Molecular Genetics",
+      "Cell Respiration & Photosynthesis",
+      "Human Physiology & Endocrine",
+      "Ecology & Ethiopian Biomes",
+    ],
+    accentColor: "from-teal-500/20 to-teal-600/10",
+  },
+  {
+    id: "english-nat",
+    name: "English",
+    amharicName: "እንግሊዝኛ",
+    stream: "natural",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 22,
+    pastQuestionsCount: 3200,
+    iconName: "Languages",
+    badge: "Speed Critical",
+    highYieldTopics: [
+      "Tenses, Voices & Conditionals",
+      "Reading Comprehension Inferences",
+      "Contextual Vocabulary & Idioms",
+      "Discourse Markers & Punctuation",
+    ],
+    accentColor: "from-violet-500/20 to-violet-600/10",
+  },
+  {
+    id: "aptitude-nat",
+    name: "Scholastic Aptitude",
+    amharicName: "አፕቲትዩድ",
+    stream: "natural",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 16,
+    pastQuestionsCount: 1850,
+    iconName: "Brain",
+    badge: "Score Booster",
+    highYieldTopics: [
+      "Quantitative & Number Series",
+      "Logical Syllogisms & Venn",
+      "Verbal Analogies & Antonyms",
+      "Spatial & Pattern Reasoning",
+    ],
+    accentColor: "from-amber-500/20 to-amber-600/10",
+  },
+];
+
+export const SOCIAL_SCIENCE_SUBJECTS: SubjectModule[] = [
+  {
+    id: "math-soc",
+    name: "Mathematics (Social)",
+    amharicName: "ሒሳብ (ማህበራዊ)",
+    stream: "social",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 22,
+    pastQuestionsCount: 2100,
+    iconName: "Calculator",
+    badge: "Core Subject",
+    highYieldTopics: [
+      "Business & Financial Math",
+      "Descriptive Statistics & Normal Curve",
+      "Coordinate Geometry",
+      "Linear Programming Basics",
+    ],
+    accentColor: "from-indigo-500/20 to-indigo-600/10",
+  },
+  {
+    id: "history",
+    name: "History",
+    amharicName: "ታሪክ",
+    stream: "social",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 26,
+    pastQuestionsCount: 2640,
+    iconName: "Hourglass",
+    badge: "High Yield",
+    highYieldTopics: [
+      "State Formation & Ancient Kingdoms",
+      "Medieval Ethiopia & Gondar Era",
+      "Modern Ethiopian State Consolidation",
+      "First & Second World Wars & Africa",
+    ],
+    accentColor: "from-rose-500/20 to-rose-600/10",
+  },
+  {
+    id: "geography",
+    name: "Geography",
+    amharicName: "ጂኦግራፊ",
+    stream: "social",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 25,
+    pastQuestionsCount: 2480,
+    iconName: "Compass",
+    badge: "Map & Analysis",
+    highYieldTopics: [
+      "Topographic Map Reading & Scale",
+      "Geomorphology & Rift Valley Geology",
+      "Ethiopian Drainage & Water Basins",
+      "Demography & Urbanization Dynamics",
+    ],
+    accentColor: "from-sky-500/20 to-sky-600/10",
+  },
+  {
+    id: "economics",
+    name: "Economics",
+    amharicName: "ኢኮኖሚክስ",
+    stream: "social",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 24,
+    pastQuestionsCount: 2210,
+    iconName: "TrendingUp",
+    badge: "Theory & Graphs",
+    highYieldTopics: [
+      "Demand, Supply & Elasticity Curves",
+      "National Income Accounting (GDP/GNP)",
+      "Fiscal & Monetary Policy Frameworks",
+      "Agricultural vs Industrial Development",
+    ],
+    accentColor: "from-emerald-500/20 to-emerald-600/10",
+  },
+  {
+    id: "english-soc",
+    name: "English",
+    amharicName: "እንግሊዝኛ",
+    stream: "social",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 22,
+    pastQuestionsCount: 3200,
+    iconName: "Languages",
+    badge: "Speed Critical",
+    highYieldTopics: [
+      "Grammatical Transformations & Voice",
+      "Critical Reading Passages",
+      "Contextual Vocabulary & Collocations",
+      "Cohesion & Paragraph Sequencing",
+    ],
+    accentColor: "from-violet-500/20 to-violet-600/10",
+  },
+  {
+    id: "aptitude-soc",
+    name: "Scholastic Aptitude",
+    amharicName: "አፕቲትዩድ",
+    stream: "social",
+    gradesCovered: "Grades 9–12",
+    unitsCount: 16,
+    pastQuestionsCount: 1850,
+    iconName: "Brain",
+    badge: "Score Booster",
+    highYieldTopics: [
+      "Critical & Analytical Reasoning",
+      "Verbal Classification & Syllogisms",
+      "Arithmetic Problem Solving",
+      "Chart & Data Interpretation",
+    ],
+    accentColor: "from-amber-500/20 to-amber-600/10",
+  },
+];
+
+export const FEATURES: FeatureItem[] = [
+  {
+    id: "condensed-notes",
+    number: "01",
+    title: "Grade 9–12 Condensed Notes",
+    description:
+      "High-yield unit summaries and formula sheets for rapid revision across all 4 high school grades.",
+    badge: "Grades 9–12",
+    iconName: "FileText",
+    highlightTags: ["Formula Sheets", "Unit Summaries"],
+    statLabel: "Coverage",
+    statValue: "100% Curriculum",
+  },
+  {
+    id: "past-papers",
+    number: "02",
+    title: "Chapter-by-Chapter Questions",
+    description:
+      "10+ years of authentic national & school exam questions with verified step-by-step solutions.",
+    badge: "2005–2016 E.C.",
+    iconName: "FolderFilter",
+    highlightTags: ["Unit-Tagged", "Verified Solutions"],
+    statLabel: "Questions",
+    statValue: "Curated",
+  },
+  {
+    id: "matric-simulator",
+    number: "03",
+    title: "Timed Exam Simulators",
+    description:
+      "Practice under timed conditions to master pacing for school finals and Grade 12 matric exams.",
+    badge: "Exam Simulation",
+    iconName: "Timer",
+    highlightTags: ["Standard Timer", "Pacing Analytics"],
+    statLabel: "Pacing",
+    statValue: "Calibrated",
+  },
+  {
+    id: "smart-diagnostics",
+    number: "04",
+    title: "Weak-Spot Diagnostics",
+    description:
+      "Visual analytics tracking your mastery index and pinpointing exactly which units need work.",
+    badge: "Smart Analytics",
+    iconName: "Crosshair",
+    highlightTags: ["Readiness Radar", "Targeted Drills"],
+    statLabel: "Accuracy",
+    statValue: "Adaptive",
+  },
+];
+
+export const HOW_IT_WORKS_STEPS: HowItWorksStep[] = [
+  {
+    step: "01",
+    title: "Take a Diagnostic Quiz",
+    description:
+      "A quick 15-minute test pinpoints your knowledge gaps across Grades 9–12.",
+    badge: "Assessment",
+    iconName: "Compass",
+  },
+  {
+    step: "02",
+    title: "Practice Targeted Units",
+    description:
+      "Master weak chapters with authentic questions and verified step-by-step solutions.",
+    badge: "Active Practice",
+    iconName: "Target",
+  },
+  {
+    step: "03",
+    title: "Simulate Real Exams",
+    description:
+      "Build pacing and exam confidence with timed semester and matric simulators.",
+    badge: "Simulation",
+    iconName: "Award",
+  },
+];
+
+export const PRICING_PLANS: PricingPlan[] = [
+  {
+    id: "free",
+    name: "Free Starter",
+    price: "0 ETB",
+    period: "forever free",
+    description:
+      "Essential study guides and practice for any student in Grades 9–12.",
+    badge: "Free Starter",
+    popular: false,
+    ctaText: "Start Free",
+    features: [
+      "All Grades 9–12 curriculum syllabus & chapter guides",
+      "Authentic practice questions with verified answers",
+      "Core formula sheets & unit summary revision guides",
+      "Full diagnostic readiness assessment & score breakdown",
+      "Personal study planner & daily practice drills",
+      "Public Telegram student discussion group",
+    ],
+  },
+  {
+    id: "pro",
+    name: "High School Pro",
+    price: "499 ETB",
+    originalPrice: "850 ETB",
+    period: "one-time payment • full academic year",
+    description:
+      "Complete practice & solutions for school exams, midterms, and Grade 12 matric.",
+    badge: "Most Popular",
+    popular: true,
+    ctaText: "Get Pro Pass",
+    features: [
+      "Full library of authentic past national & school exam questions",
+      "Step-by-step verified solutions & examiner distractor traps",
+      "Full-length timed matric simulators & semester test drills",
+      "Smart diagnostic heatmaps across all 4 high school grades",
+      "Complete downloadable formula sheets & condensed notes",
+      "Instant Telebirr, CBE Birr & Awash Pay checkout (Coming Soon)",
+    ],
+  },
+  {
+    id: "ultimate",
+    name: "All-Access Pass",
+    price: "1,200 ETB",
+    originalPrice: "2,400 ETB",
+    period: "one-time payment • lifetime high school access",
+    description:
+      "Multi-year access across Grade 9 through 12 matric, plus upcoming AI tools.",
+    badge: "Future Ready",
+    popular: false,
+    isFutureTier: true,
+    ctaText: "Get All-Access",
+    features: [
+      "Everything in High School Pro",
+      "Multi-year access across all 4 high school grades & matric",
+      "VIP Founder badge on the student community",
+      "Early beta access to all upcoming tool releases",
+    ],
+    upcomingFeatures: [
+      "AI Socratic Tutor in Amharic & English",
+      "Zero-data offline mobile study mode",
+      "Weekly live masterclasses with senior examiners",
+      "University cutoff predictor for AAU, ASTU & top colleges",
+      "Parent SMS weekly score & progress reports",
+    ],
+  },
+];
+
+export const FAQS: FAQItem[] = [
+  {
+    question: "Who is Qelem for?",
+    answer:
+      "Qelem is built for all Ethiopian high school students (Grades 9–12) — whether you are building strong foundations in Grades 9–11 or preparing for Grade 12 national matric exams.",
+    category: "General",
+  },
+  {
+    question: "Does Qelem cover both Natural and Social Science streams?",
+    answer:
+      "Yes. Qelem covers all core subjects for both streams across all four high school years.",
+    category: "Curriculum",
+  },
+  {
+    question: "Is the content aligned with the new Ethiopian curriculum?",
+    answer:
+      "Yes. All units, questions, and formula sheets are strictly aligned with the Ministry of Education's 2016/2017 E.C. syllabus.",
+    category: "Curriculum",
+  },
+  {
+    question: "What payment methods are supported?",
+    answer:
+      "We accept Telebirr, CBE Birr, Awash Bank, and domestic bank cards via Chapa with instant activation.",
+    category: "Billing",
+  },
+  {
+    question: "Can I use Qelem on my phone?",
+    answer:
+      "Yes. Qelem is fully responsive and works smoothly on mobile phones, tablets, and computers.",
+    category: "Platform",
+  },
+];
+
+export const FOOTER_LINKS: FooterLinkGroup[] = [
+  {
+    title: "Platform",
+    links: [
+      { label: "Features", href: "#features" },
+      { label: "Curriculum (9–12)", href: "#curriculum" },
+      { label: "How It Works", href: "#how-it-works" },
+      { label: "Pricing & Plans", href: "#pricing" },
+      { label: "Diagnostic Engine", href: "/practice" },
+    ],
+  },
+  {
+    title: "Curriculum",
+    links: [
+      { label: "Natural Science Stream", href: "#curriculum" },
+      { label: "Social Science Stream", href: "#curriculum" },
+      { label: "Mathematics & Physics", href: "#curriculum" },
+      { label: "Chemistry & Biology", href: "#curriculum" },
+      { label: "History & Geography", href: "#curriculum" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { label: "Formula Cheatsheets", href: "#curriculum" },
+      { label: "Matric Readiness Radar", href: "/practice" },
+      { label: "Frequently Asked Questions", href: "#faq" },
+      { label: "2016/2017 E.C. Exam Guide", href: "#" },
+    ],
+  },
+  {
+    title: "Community & Legal",
+    links: [
+      {
+        label: "Telegram Study Channel",
+        href: "https://t.me/qelem_matric_prep",
+        external: true,
+        badge: "Active",
+      },
+      { label: "Student Discussion Group", href: "https://t.me/qelem_matric_prep", external: true },
+      { label: "Ministry Curriculum Alignment", href: "#curriculum" },
+      { label: "Terms of Service", href: "#" },
+      { label: "Privacy Policy", href: "#" },
+    ],
+  },
+];
