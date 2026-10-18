@@ -36,4 +36,30 @@ export interface MockExamAttempt {
   unansweredCount?: number;
   totalQuestions?: number;
   gradeBreakdown?: Record<number, { total: number; correct: number; percent: number }>;
+  questionResults?: Record<string, GradedQuestionDetail>;
 }
+
+export type SanitizedExamQuestion = Omit<
+  ExamQuestion,
+  "correctOptionId" | "explanation" | "derivationSteps" | "distractorAnalysis"
+>;
+
+export interface GradedQuestionDetail {
+  questionId: string;
+  selectedOptionId: "A" | "B" | "C" | "D" | null;
+  correctOptionId: "A" | "B" | "C" | "D";
+  isCorrect: boolean;
+  explanation: string;
+  derivationSteps?: string[];
+  keyFormula?: string;
+  distractorAnalysis?: any[];
+}
+
+export interface ExamStartResponse {
+  sessionId: string;
+  examDef: MockExamDefinition;
+  questions: SanitizedExamQuestion[];
+  startedAt: string;
+  durationMinutes: number;
+}
+

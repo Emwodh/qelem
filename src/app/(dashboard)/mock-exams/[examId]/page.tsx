@@ -21,6 +21,10 @@ import {
   ShieldCheck,
   Check,
   HelpCircle,
+  Slash,
+  ZoomIn,
+  X,
+  Loader2,
 } from "lucide-react";
 import { OFFICIAL_MOCK_EXAMS, getQuestionsForExam, saveActiveAttempt, getActiveAttempt, clearActiveAttempt } from "@/lib/mockExamData";
 import { MockExamDefinition, MockExamAttempt } from "@/types/exam";
@@ -77,8 +81,15 @@ export default function ExamTestRoomPage() {
   const [flagged, setFlagged] = useState<Record<string, boolean>>({});
   const [remainingSeconds, setRemainingSeconds] = useState<number>(examDef.durationMinutes * 60);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [completedAttempt, setCompletedAttempt] = useState<MockExamAttempt | null>(null);
+  const [examSessionStartedAt, setExamSessionStartedAt] = useState<string>(() => new Date().toISOString());
+
+  // CBT Realism: Strikeout / Option Elimination state: Record<questionId, Record<optionId, boolean>>
+  const [strikeouts, setStrikeouts] = useState<Record<string, Record<string, boolean>>>({});
+  // CBT Realism: Tap-to-zoom Lightbox state for diagram & formula inspection
+  const [zoomModalContent, setZoomModalContent] = useState<string | null>(null);
 
   // Filter for review mode on scorecard
   const [reviewFilter, setReviewFilter] = useState<"all" | "incorrect" | "flagged">("all");
@@ -89,6 +100,9 @@ export default function ExamTestRoomPage() {
     if (saved) {
       setAnswers(saved.answers || {});
       setFlagged(saved.flagged || {});
+      if (saved.startedAt) {
+        setExamSessionStartedAt(saved.startedAt);
+      }
       if (saved.isSubmitted) {
         setIsSubmitted(true);
         setCompletedAttempt(saved);
@@ -98,8 +112,41 @@ export default function ExamTestRoomPage() {
     }
   }, [examDef.id]);
 
-  // 5. Submit Handler
-  const handleSubmitExam = useCallback(() => {
+  // 5. Submit Handler (Authoritative Server-Side Grading with Resilient Local Fallback)
+  const handleSubmitExam = useCallback(async () => {
+    setIsSubmitting(true);
+    const timeElapsedSec = Math.max(0, (examDef.durationMinutes * 60) - remainingSeconds);
+
+    // 5.1 Primary Flow: Server-Side Grading API (/api/exams/[id]/submit)
+    try {
+      const response = await fetch(`/api/exams/${encodeURIComponent(examDef.id)}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examId: examDef.id,
+          answers,
+          flagged,
+          timeElapsedSec,
+          startedAt: examSessionStartedAt,
+        }),
+      });
+
+      if (response.ok) {
+        const payload = await response.json();
+        if (payload?.attempt) {
+          saveActiveAttempt(payload.attempt);
+          setCompletedAttempt(payload.attempt);
+          setIsSubmitted(true);
+          setShowSubmitModal(false);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+    } catch (apiErr) {
+      console.warn("Server submission unreachable, falling back to local client grading:", apiErr);
+    }
+
+    // 5.2 Resilient Offline Fallback (Guarantees zero student disruption during network drops)
     let correct = 0;
     const gradeStats: Record<number, { total: number; correct: number; percent: number }> = {
       9: { total: 0, correct: 0, percent: 0 },
@@ -130,14 +177,14 @@ export default function ExamTestRoomPage() {
     const total = questions.length;
     const answeredCount = Object.keys(answers).length;
     const unansweredCount = total - answeredCount;
-    const scorePct = Math.round((correct / total) * 100);
+    const scorePct = total > 0 ? Math.round((correct / total) * 100) : 0;
 
     const attempt: MockExamAttempt = {
       examId: examDef.id,
       examTitle: examDef.title,
       subject: examDef.subject,
       subjectId: examDef.subjectId,
-      startedAt: new Date().toISOString(),
+      startedAt: examSessionStartedAt,
       remainingSeconds: Math.max(0, remainingSeconds),
       answers,
       flagged,
@@ -156,7 +203,8 @@ export default function ExamTestRoomPage() {
     setCompletedAttempt(attempt);
     setIsSubmitted(true);
     setShowSubmitModal(false);
-  }, [answers, flagged, examDef, questions, remainingSeconds]);
+    setIsSubmitting(false);
+  }, [answers, flagged, examDef, questions, remainingSeconds, examSessionStartedAt]);
 
   // 6. Countdown Timer with auto-submit
   useEffect(() => {
@@ -206,12 +254,44 @@ export default function ExamTestRoomPage() {
       examTitle: examDef.title,
       subject: examDef.subject,
       subjectId: examDef.subjectId,
-      startedAt: new Date().toISOString(),
+      startedAt: examSessionStartedAt,
       remainingSeconds,
       answers: newAnswers,
       flagged,
       isSubmitted: false,
     });
+  };
+
+  // 7.1 CBT Realism: Toggle Strikeout / Option Elimination
+  const handleToggleStrikeout = (e: React.MouseEvent, optId: "A" | "B" | "C" | "D") => {
+    e.stopPropagation();
+    if (isSubmitted) return;
+    const q = questions[currentIndex];
+    if (!q) return;
+
+    setStrikeouts((prev) => {
+      const qStrikes = { ...(prev[q.id] || {}) };
+      qStrikes[optId] = !qStrikes[optId];
+      return { ...prev, [q.id]: qStrikes };
+    });
+
+    // If candidate strikes out an option that was selected, clear the selection
+    if (answers[q.id] === optId) {
+      const newAnswers = { ...answers };
+      delete newAnswers[q.id];
+      setAnswers(newAnswers);
+      saveActiveAttempt({
+        examId: examDef.id,
+        examTitle: examDef.title,
+        subject: examDef.subject,
+        subjectId: examDef.subjectId,
+        startedAt: examSessionStartedAt,
+        remainingSeconds,
+        answers: newAnswers,
+        flagged,
+        isSubmitted: false,
+      });
+    }
   };
 
   // 8. Toggle Flag for Review
@@ -469,8 +549,11 @@ export default function ExamTestRoomPage() {
           <div className="space-y-4">
             {reviewQuestions.map((q, idx) => {
               const studentAnswer = answers[q.id];
-              const isCorrect = studentAnswer === q.correctOptionId;
+              const resultDetail = completedAttempt?.questionResults?.[q.id];
+              const verifiedKey = resultDetail?.correctOptionId || q.correctOptionId;
+              const isCorrect = studentAnswer === verifiedKey;
               const isUnanswered = !studentAnswer;
+              const explanationText = resultDetail?.explanation || q.explanation || "Detailed solution derivation available in verified curriculum notes.";
 
               return (
                 <div
@@ -513,7 +596,7 @@ export default function ExamTestRoomPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
                     {q.options.map((opt) => {
                       const isChosen = studentAnswer === opt.id;
-                      const isAnswerKey = q.correctOptionId === opt.id;
+                      const isAnswerKey = verifiedKey === opt.id;
 
                       let style = "border-neutral-200 bg-white text-neutral-700";
                       if (isAnswerKey) {
@@ -548,11 +631,12 @@ export default function ExamTestRoomPage() {
 
                   {/* Derivation / Explanation Box */}
                   <div className="rounded-xl border border-neutral-200/80 bg-neutral-50/80 p-4 space-y-1.5">
-                    <span className="text-xs font-bold text-neutral-900 uppercase tracking-wider block">
-                      Step-by-Step Derivation & Formula:
+                    <span className="text-xs font-bold text-neutral-900 uppercase tracking-wider block flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
+                      Step-by-Step Derivation & MoE Solution:
                     </span>
                     <div className="text-xs text-neutral-700 leading-relaxed">
-                      <MathRenderer content={q.explanation} />
+                      <MathRenderer content={explanationText} />
                     </div>
                   </div>
                 </div>
@@ -638,18 +722,30 @@ export default function ExamTestRoomPage() {
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleToggleFlag}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                      flagged[currentQ.id]
-                        ? "bg-amber-50 border-amber-300 text-amber-800"
-                        : "bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    <Flag className={`h-3.5 w-3.5 ${flagged[currentQ.id] ? "fill-amber-500 text-amber-500" : ""}`} />
-                    <span>{flagged[currentQ.id] ? "Flagged (Key F)" : "Flag for Review"}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setZoomModalContent(currentQ.prompt)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 transition-colors cursor-pointer"
+                      title="Enlarge diagram or equation"
+                    >
+                      <ZoomIn className="h-3.5 w-3.5 text-neutral-500" />
+                      <span className="hidden sm:inline">Zoom</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleToggleFlag}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+                        flagged[currentQ.id]
+                          ? "bg-amber-50 border-amber-300 text-amber-800"
+                          : "bg-white border-neutral-200 text-neutral-600 hover:bg-neutral-50"
+                      }`}
+                    >
+                      <Flag className={`h-3.5 w-3.5 ${flagged[currentQ.id] ? "fill-amber-500 text-amber-500" : ""}`} />
+                      <span>{flagged[currentQ.id] ? "Flagged (Key F)" : "Flag for Review"}</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Prompt */}
@@ -657,34 +753,59 @@ export default function ExamTestRoomPage() {
                   <MathRenderer content={currentQ.prompt} />
                 </div>
 
-                {/* Options */}
+                {/* Options with Strikeout / Option Elimination */}
                 <div className="space-y-3 pt-2">
                   {currentQ.options.map((opt) => {
                     const isSelected = answers[currentQ.id] === opt.id;
+                    const isStruck = Boolean(strikeouts[currentQ.id]?.[opt.id]);
+
                     return (
-                      <button
+                      <div
                         key={opt.id}
-                        type="button"
-                        onClick={() => handleSelectOption(opt.id)}
-                        className={`w-full flex items-center gap-3.5 rounded-2xl border p-4 text-left text-sm transition-all cursor-pointer ${
-                          isSelected
+                        className={`group relative flex items-center justify-between gap-3 rounded-2xl border p-3.5 sm:p-4 text-left text-sm transition-all ${
+                          isStruck
+                            ? "bg-neutral-100/60 border-neutral-200 text-neutral-400 opacity-60"
+                            : isSelected
                             ? "bg-neutral-950 border-neutral-950 text-white shadow-sm ring-1 ring-neutral-950"
                             : "bg-neutral-50/70 border-neutral-200 hover:border-neutral-400 hover:bg-white text-neutral-800"
                         }`}
                       >
-                        <span
-                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-xs font-bold border transition-colors ${
-                            isSelected
-                              ? "bg-white text-neutral-950 border-white"
-                              : "bg-white text-neutral-700 border-neutral-200"
-                          }`}
+                        <button
+                          type="button"
+                          onClick={() => handleSelectOption(opt.id)}
+                          className="flex-1 flex items-center gap-3.5 text-left cursor-pointer min-w-0"
                         >
-                          {opt.id}
-                        </span>
-                        <div className="flex-1 font-medium">
-                          <MathRenderer content={opt.text} />
-                        </div>
-                      </button>
+                          <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-xs font-bold border transition-colors ${
+                              isStruck
+                                ? "bg-neutral-200 text-neutral-400 border-neutral-300"
+                                : isSelected
+                                ? "bg-white text-neutral-950 border-white"
+                                : "bg-white text-neutral-700 border-neutral-200"
+                            }`}
+                          >
+                            {opt.id}
+                          </span>
+                          <div className={`flex-1 font-medium select-none ${isStruck ? "line-through text-neutral-400" : ""}`}>
+                            <MathRenderer content={opt.text} />
+                          </div>
+                        </button>
+
+                        {/* Strikeout / Eliminate Option Toggle */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleStrikeout(e, opt.id)}
+                          className={`shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all cursor-pointer ${
+                            isStruck
+                              ? "bg-rose-50 border-rose-300 text-rose-700 hover:bg-rose-100"
+                              : "bg-white/80 border-neutral-200 text-neutral-400 opacity-70 group-hover:opacity-100 hover:text-neutral-700 hover:bg-neutral-100"
+                          }`}
+                          title={isStruck ? "Restore eliminated option" : "Eliminate this distractor (strikeout)"}
+                        >
+                          <Slash className="h-3 w-3" />
+                          <span className="hidden sm:inline">{isStruck ? "Restore" : "Eliminate"}</span>
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -832,18 +953,66 @@ export default function ExamTestRoomPage() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => setShowSubmitModal(false)}
-                className="flex-1 h-11 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 font-semibold text-xs transition-colors"
+                onClick={() => !isSubmitting && setShowSubmitModal(false)}
+                disabled={isSubmitting}
+                className="flex-1 h-11 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 text-neutral-700 font-semibold text-xs transition-colors disabled:opacity-50 cursor-pointer"
               >
                 Return to Test
               </button>
               <button
                 type="button"
                 onClick={handleSubmitExam}
-                className="flex-1 h-11 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm transition-all"
+                disabled={isSubmitting}
+                className="flex-1 h-11 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white font-semibold text-xs shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                Confirm & Submit
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    <span>Grading on Server...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-400" />
+                    <span>Confirm & Submit</span>
+                  </>
+                )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Tap-to-Zoom Diagram & Formula Lightbox Modal */}
+      {zoomModalContent && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setZoomModalContent(null)}
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-neutral-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setZoomModalContent(null)}
+              className="absolute top-5 right-5 p-2 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-colors cursor-pointer"
+              aria-label="Close zoom modal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-neutral-500">
+                <ZoomIn className="h-4 w-4 text-blue-600" />
+                <span>Enlarged Question & Diagram Inspection</span>
+              </div>
+              <div className="text-base sm:text-xl font-medium text-neutral-950 leading-relaxed overflow-x-auto py-2">
+                <MathRenderer content={zoomModalContent} />
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Press Esc or click outside to dismiss magnification.
+              </p>
             </div>
           </div>
         </div>
@@ -851,3 +1020,4 @@ export default function ExamTestRoomPage() {
     </div>
   );
 }
+

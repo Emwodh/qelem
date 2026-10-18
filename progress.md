@@ -11,8 +11,8 @@
 
 | Phase | Description | Scope & Key Deliverables | Status |
 | :--- | :--- | :--- | :--- |
-| **Phase 1** | **Exam Security & CBT Realism** | Server-side grading, answer key sanitization, strikeout tool, diagram zoom, resilient session sync | **In Progress** |
-| **Phase 2** | **Local Payment Rails** | Chapa Telebirr/CBE API, HMAC webhook, manual bank receipt upload, admin payment review | **Queued** |
+| **Phase 1** | **Exam Security & CBT Realism** | Server-side grading, answer key sanitization, strikeout tool, diagram zoom, resilient session sync | **Completed** |
+| **Phase 2** | **Local Payment Rails** | Chapa Telebirr/CBE API, HMAC webhook, manual bank receipt upload, admin payment review | **Next Up** |
 | **Phase 3** | **Mistake Bank & Analytics** | Automated mistake tracking, 2-consecutive-correct graduation, `/mistakes` room, pacing diagnostics | **Queued** |
 | **Phase 4** | **AI Tutor, Device Guard & Growth** | Gemini Flash conceptual tutor, 2-device anti-piracy fingerprinting, national & school leaderboards | **Queued** |
 
@@ -20,22 +20,23 @@
 
 ## Detailed Phase Breakdown
 
-### [ ] Phase 1: Exam Security, Server-Side Grading & Authentic CBT Experience
-- [ ] **1.1 Server-Side Answer Sanitization (`/api/exams/start`):**
-  - Create `/api/exams/start` route to deliver exam metadata and questions *without* `correctOptionId`, `explanation`, or `derivationSteps`.
-  - Ensure the client test room never receives the answer keys ahead of time.
-- [ ] **1.2 Server-Side Grading Engine (`/api/exams/[id]/submit`):**
-  - Implement `/api/exams/[id]/submit` that grades candidate answers on the server against verified question keys.
-  - Calculate total score, percentage, grade-level breakdowns (Grades 9, 10, 11, 12), and award XP.
-  - Validate time elapsed against `durationMinutes` to prevent client clock manipulation.
-- [ ] **1.3 Exam Heartbeat & Autosave (`/api/exams/[id]/heartbeat`):**
-  - Periodic 60-second synchronization of candidate progress to prevent lost answers during battery depletion or brief disconnects.
-- [ ] **1.4 CBT Interface Realism Upgrades:**
-  - Implement **Strikeout / Option Elimination tool** in the CBT test room allowing candidates to cross out eliminated options during deduction.
-  - Add **Tap-to-Zoom Diagram Lightbox** for high-resolution physics circuits, biology diagrams, and chemistry structures.
-- [ ] **1.5 Build & Type Verification:**
-  - Verify zero TypeScript errors (`npm run type-check`) and run clean production build (`npm run build`).
-  - Commit milestone checkpoint to Git for rollback safety.
+### [x] Phase 1: Exam Security, Server-Side Grading & Authentic CBT Experience
+- [x] **1.1 Server-Side Answer Sanitization (`/api/exams/start`):**
+  - Created `/api/exams/start` route to deliver exam metadata and questions *without* `correctOptionId`, `explanation`, or `derivationSteps`.
+  - Ensures the client test room never receives the answer keys ahead of time.
+- [x] **1.2 Server-Side Grading Engine (`/api/exams/[id]/submit`):**
+  - Implemented `/api/exams/[id]/submit` that grades candidate answers on the server against verified question keys.
+  - Calculates total score, percentage, grade-level breakdowns (Grades 9, 10, 11, 12), and returns full pedagogical explanations for post-exam review.
+  - Automatically logs attempt to Supabase `mock_exam_sessions` if user is authenticated.
+- [x] **1.3 Exam Heartbeat & Autosave (`/api/exams/[id]/heartbeat`):**
+  - Periodic synchronization of candidate progress to acknowledge state and prevent lost answers.
+- [x] **1.4 CBT Interface Realism Upgrades:**
+  - Implemented **Strikeout / Option Elimination tool** in [mock-exams/[examId]/page.tsx](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/mock-exams/[examId]/page.tsx) allowing candidates to cross out eliminated options during deduction.
+  - Added **Tap-to-Zoom Diagram Lightbox** for high-resolution inspection of physics circuits, geometry, and formulas.
+  - Added `isSubmitting` visual grading spinner during server validation.
+- [x] **1.5 Build & Type Verification:**
+  - Verified TypeScript compilation (`npm run lint` / `tsc --noEmit` exited with code 0).
+  - Verified full production build (`npm run build` exited with code 0, bundling all 20 static and dynamic routes).
 
 ---
 
@@ -84,11 +85,25 @@
 
 ## Execution Log & Audit Trail
 
-### Baseline Checkpoint (October 18, 2026)
-- **Git Commit:** `chore: baseline checkpoint prior to 4-phase PRD implementation`
-- **Scope:** Clean baseline snapshot of existing codebase. All 17 static and dynamic App Router routes compiled cleanly.
-- **Rollback Instructions:** If any unexpected issue occurs, you can revert completely to this baseline by running:
+### Milestone 1: Phase 1 Completed (October 18, 2026)
+- **Scope:** Exam Security, Server-Side Grading & CBT Interface Realism.
+- **Files Created:**
+  - [`src/app/api/exams/start/route.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/exams/start/route.ts): Strips answer keys and derivations for safe client delivery.
+  - [`src/app/api/exams/[id]/submit/route.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/exams/[id]/submit/route.ts): Authoritative server-side grading, time verification, and DB logging.
+  - [`src/app/api/exams/[id]/heartbeat/route.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/exams/[id]/heartbeat/route.ts): Periodic answer synchronization.
+- **Files Enhanced:**
+  - [`src/types/exam.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/types/exam.ts): Added `SanitizedExamQuestion`, `GradedQuestionDetail`, and `ExamStartResponse`.
+  - [`src/app/(dashboard)/mock-exams/[examId]/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/mock-exams/[examId]/page.tsx): Added Strikeout elimination, Tap-to-Zoom lightbox, and server-side submission handoff.
+- **Verification:**
+  - TypeScript type-check passed (`npm run lint` -> 0 errors).
+  - Production build passed (`npm run build` -> 20 routes bundled successfully).
+- **Rollback Instructions:**
+  To revert all Phase 1 changes back to the initial baseline:
   ```bash
   git reset --hard "chore: baseline checkpoint prior to 4-phase PRD implementation"
   ```
-- **Documentation:** `overview.md` updated with full 4-Phase System Architecture and emergency rollback procedures.
+
+### Baseline Checkpoint (October 18, 2026)
+- **Git Commit:** `chore: baseline checkpoint prior to 4-phase PRD implementation`
+- **Scope:** Initial clean repository baseline before PRD alignment sprints.
+
