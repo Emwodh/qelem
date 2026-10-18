@@ -1,72 +1,153 @@
-# Qelem (ቀለም) — Platform Architecture & System Overview (`overview.md`)
+# Qelem («ቀለም») — Platform Architecture & Master System Overview (`overview.md`)
 
-**Target Audience:** Ethiopian Grade 9–12 Candidates & University Entrance Aspirants  
-**Curriculum Standard:** FDRE Ministry of Education Standardized National Syllabus (Natural & Social Science)  
-**Architecture Model:** Local-First PWA with Supabase Cloud Synchronization  
+**Target Audience:** Ethiopian Grade 9–12 Candidates & University Entrance Aspirants (Natural & Social Science)  
+**Curriculum Standard:** FDRE Ministry of Education Standardized National Syllabus & EAES CBT Specifications  
+**Architecture Model:** Local-First PWA (Next.js 16 + React 19 + Serwist) with Supabase PostgreSQL & Server-Side Security  
+**Document Version:** 3.0 (Master 4-Phase Production Architecture)  
+**Last Updated:** October 18, 2026  
 
 ---
 
-## 1. System Architecture
+## 1. High-Level System Architecture
 
 ```mermaid
 graph TD
-    Client["Client PWA (Next.js 16 + React 19)"]
-    ServiceWorker["Serwist Service Worker (/sw.js)"]
-    LocalStore["Client LocalStorage (Offline Engine)"]
-    SupabaseAuth["Supabase Auth (JWT / Sessions)"]
-    SupabaseDB["Supabase Postgres (RLS Protected)"]
-    AdminAPI["Admin Ingestion Engine (/api/admin/*)"]
+    subgraph ClientLayer ["Client & PWA Layer (Next.js 16 + React 19)"]
+        Landing["Landing & Pricing (/)"]
+        PracticeRoom["CBT Test Room (/mock-exams/[id])"]
+        StudyRoom["Curriculum Hub (/learn, /bank)"]
+        MistakesRoom["Spaced Repetition Drill (/mistakes)"]
+        SW["Serwist Service Worker (/sw.js)"]
+        LocalCache["IndexedDB / LocalStore State"]
+    end
 
-    Client -->|Pre-caches & Offline Routes| ServiceWorker
-    Client -->|Local Fallback State| LocalStore
-    Client -->|Candidate Auth| SupabaseAuth
-    Client -->|Syncs Profiles & Sessions| SupabaseDB
-    AdminAPI -->|Protected by ADMIN_SECRET_KEY| SupabaseDB
+    subgraph SecurityLayer ["Security & Routing Guard (proxy.ts)"]
+        Proxy["Next.js Proxy / Middleware"]
+        DeviceGuard["2-Device Session Limiter"]
+        AdminGuard["Admin Key & Role Verifier"]
+    end
+
+    subgraph ServerAPILayer ["Serverless API & Security Boundaries"]
+        ExamStart["/api/exams/start<br/>(Strips Keys & Derivations)"]
+        ExamSubmit["/api/exams/[id]/submit<br/>(Server Grading & XP)"]
+        ChapaPay["/api/payments/chapa/*<br/>(Telebirr, CBE Birr, Webhook)"]
+        ManualPay["/api/payments/manual<br/>(Receipt Upload)"]
+        AITutor["/api/ai/explain-custom<br/>(Gemini Flash Token-Gated)"]
+        AdminIngest["/api/admin/*<br/>(PDF / Bulk Parser)"]
+    end
+
+    subgraph DatabaseLayer ["Supabase PostgreSQL + Storage"]
+        Profiles["public.profiles"]
+        Questions["public.questions"]
+        ExamSessions["public.mock_exam_sessions"]
+        MistakeBank["public.mistake_bank"]
+        Payments["public.payments & coupons"]
+        DeviceSessions["public.device_sessions"]
+    end
+
+    %% Connections
+    PracticeRoom -->|Pre-caches & Offline Resilience| SW
+    PracticeRoom <-->|Syncs Answers & Heartbeats| LocalCache
+    PracticeRoom -->|1. Request Secure Paper| ExamStart
+    PracticeRoom -->|2. Submit Answers for Grading| ExamSubmit
+    
+    Proxy --> DeviceGuard
+    Proxy --> AdminGuard
+    
+    ExamStart --> Questions
+    ExamSubmit --> ExamSessions
+    ExamSubmit --> MistakeBank
+    ChapaPay --> Payments
+    ManualPay --> Payments
+    AITutor --> Questions
+    AdminIngest --> Questions
 ```
 
 ---
 
-## 2. Core Modules & Directory Layout
+## 2. Four-Phase Master Implementation Architecture
 
-- **`src/app/`**: Next.js App Router
-  - `(auth)/`: Canonical authentication screens (`/login`, `/signup`) with split-screen Apple-grade design tokens.
-  - `(dashboard)/`: Candidate workspace
-    - `/dashboard`: High-yield overview, diagnostic scores, matric countdown, subject coverage bars.
-    - `/bank`: Filterable national question bank by subject, grade (9–12), exam year, and difficulty.
-    - `/mock-exams`: Timed EUEE examination simulators with auto-submit and grade-level scorecards.
-    - `/learn`: Theory, formula summaries, laws, and common misconception/trap breakdowns.
-    - `/study-plan`: Personalized daily revision targets, milestones, and high-yield topic drills.
-    - `/admin/questions`: Multi-format question parser (PDF, Markdown, CSV, JSON) and ingestion dashboard.
-    - `/settings`: Candidate profile, stream switcher, target score, and target university config.
-  - `api/admin/`: Protected admin ingestion and verification endpoints.
-  - `api/seed/`: Curriculum database seeder.
-  - `sw.ts`: Serwist service worker entry point.
-- **`src/components/`**: Modular presentation layer
-  - `landing/`: Studio-crafted landing page sections (Hero, Features, StreamSelector, HowItWorks, Pricing, FAQ, Footer).
-  - `practice/`: Diagnostic test workspace (QuestionCard, PracticeHeader, ExplanationDrawer, DiagnosticSummary).
-  - `ui/`: MathRenderer (KaTeX inline and block LaTeX formula renderer).
-  - `auth/`: AuthModal with tabbed OAuth, email credentials, and guest fallback.
-- **`src/lib/`**: Business logic, offline state & database clients
-  - `userStore.ts`: Candidate profile store, countdown calendar, subject mastery definitions.
-  - `questionStore.ts`: Question loading, filtering, parser, and storage synchronization.
-  - `mockExamData.ts`: Official past paper catalogs and test attempt persistence.
-  - `curriculumData.ts`: Master curriculum question set and unit definitions.
-  - `cheatSheetData.ts`: Formula sheets, laws, and examiner tips.
-  - `supabase/`: Browser and server SSR Supabase clients.
+The platform evolution is structured into 4 sequential, self-contained engineering phases to guarantee safety, zero downtime, and complete rollback safety:
+
+```mermaid
+flowchart LR
+    P1["Phase 1:<br/>Exam Security &<br/>CBT Realism"] --> P2["Phase 2:<br/>Local Payment Rails<br/>(Chapa + CBE/Telebirr)"]
+    P2 --> P3["Phase 3:<br/>Automated Mistake Bank<br/>& Deep Analytics"]
+    P3 --> P4["Phase 4:<br/>Gemini AI Tutor &<br/>Device Guard"]
+```
+
+### Phase 1: Exam Security, Server-Side Grading & Authentic CBT Experience
+* **Core Objective:** Eliminate client-side answer key leakage during timed exams and upgrade the CBT test room to official EAES standards.
+* **Key Components:**
+  1. `/api/exams/start`: Sanitizes question payloads by removing `correctOptionId`, explanations, and derivation steps before transmitting to the client browser.
+  2. `/api/exams/[id]/submit`: Secure server-side grading against database keys, time verification (preventing client clock tampering), and scoring calculation.
+  3. `/api/exams/[id]/heartbeat`: Syncs partial candidate answers every 60 seconds with offline resilience.
+  4. CBT UI Enhancements: Strikeout / Option Elimination toggle (crossing out eliminated options A, B, C, D) and tap-to-zoom diagram modal.
+
+### Phase 2: Local Payment Rails & Monetization Engine
+* **Core Objective:** Enable real-world revenue collection in Ethiopian Birr (ETB) through Chapa USSD rails and manual bank receipts.
+* **Key Components:**
+  1. Automated Chapa Gateway: `/api/payments/chapa/init` and `/api/payments/chapa/webhook` with cryptographic HMAC SHA-256 signature verification.
+  2. Manual Receipt Fallback: `/api/payments/manual` allowing students to submit CBE/Telebirr transaction numbers or screenshots with `MANUAL_REVIEW` status.
+  3. Admin Payment Verification: `/admin/payments` portal to review, approve, or reject manual slips with 1-click subscription activation.
+  4. Entitlement Gating: Unlocking step-by-step derivations, offline paper downloads, and unlimited question bank drills.
+
+### Phase 3: Automated Mistake Bank, Spaced Repetition & Deep Analytics
+* **Core Objective:** Implement automated learning retention that targets candidate curriculum weaknesses.
+* **Key Components:**
+  1. Automated Mistake Bank: Incorrect answers from practice or mock exams are automatically upserted into `public.mistake_bank`.
+  2. Spaced Repetition Engine: Implements the graduation rule where a question must be answered correctly **2 consecutive times on separate sessions** to be cleared.
+  3. `/mistakes`: Dedicated practice drill room targeting failed concepts.
+  4. Standalone Analytics (`/analytics`, `/analytics/report/[id]`): Pacing telemetry (average seconds per question, "Time Sink" questions >4 minutes), Grade 9–12 unit accuracy matrix, and projected aggregate score out of 600/700 compared to AAU cut-offs.
+
+### Phase 4: Gemini AI Tutor, Anti-Piracy Device Guard & Social Growth
+* **Core Objective:** Provide intelligent conceptual assistance, prevent account credential sharing, and drive viral student referral loops.
+* **Key Components:**
+  1. Gemini Flash AI Tutor: `/api/ai/explain-custom` with predefined prompts (*"Explain in simple Amharic"*, *"Show shortcut trick"*, *"Generate similar question"*), token-cached and rate-limited to 15 queries/day for Pro users.
+  2. Anti-Piracy Device Guard: Cryptographic browser/device fingerprinting stored in `public.device_sessions`, limiting paid accounts to **maximum 2 registered devices** (1 mobile + 1 PC) and 1 active concurrent session.
+  3. Social & Growth Engine: National, Regional, and School Leaderboards (`/leaderboard`) and referral invite system (`/referrals`).
 
 ---
 
-## 3. Security & Governance
+## 3. Database Schema Architecture (Supabase PostgreSQL)
 
-1. **Environment Variables**:
-   - `NEXT_PUBLIC_SUPABASE_URL`: Supabase project endpoint.
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Public client anon key.
-   - `ADMIN_SECRET_KEY`: High-entropy secret for administrative API access.
-   - `SUPABASE_SERVICE_ROLE_KEY`: Server-only secret for RLS bypass during database seeding.
-2. **Access Control**:
-   - Strict server-side verification on all `/api/admin/*` routes.
-   - Middleware gating on `/admin/*` routes requiring verified admin authorization.
-   - Row-Level Security (RLS) policies on `public.questions`, `public.profiles`, `public.practice_sessions`, and `public.mock_exam_sessions`.
-3. **Repository Sanitation**:
-   - Zero secrets committed to git.
-   - Dedicated `.gitignore` strictly excluding `.env*`, `.next`, `node_modules`, and local build logs.
+| Table | Status | Primary Purpose |
+| :--- | :--- | :--- |
+| `public.profiles` | Active | Candidate profile, stream, grade, target score, target university |
+| `public.questions` | Active | Curriculum and past exam questions with KaTeX prompts, options, explanations |
+| `public.practice_sessions` | Active | Baseline diagnostic sprint attempts |
+| `public.mock_exam_sessions` | Active | Full-length 60-question CBT exam attempts and timing logs |
+| `public.mistake_bank` | Phase 3 | Personalized mistake bank with fail count and consecutive correct tracking |
+| `public.payments` | Phase 2 | Chapa transaction logs and manual CBE/Telebirr receipt reviews |
+| `public.coupons` | Phase 2 | Promo and campus ambassador discount codes |
+| `public.device_sessions` | Phase 4 | Browser fingerprint hash and active session locks |
+
+---
+
+## 4. Emergency Rollback & Safety Procedures
+
+To ensure complete safety and give you the ability to revert anytime if unexpected behavior occurs:
+
+### 1. Git Version Control Checkpoints
+Every phase and milestone is committed to local Git. You can inspect or revert changes using:
+```bash
+# Check current repository status
+git status
+
+# View commit history with checkpoint tags
+git log --oneline -n 10
+
+# View exact changes made in the latest commit
+git show HEAD
+
+# Roll back the most recent commit (preserving your working files)
+git reset --soft HEAD~1
+
+# Completely restore the repository to the baseline checkpoint
+git reset --hard "chore: baseline checkpoint prior to 4-phase PRD implementation"
+```
+
+### 2. Zero-Disruption Build Verification
+Every modification is verified against:
+- Strict TypeScript compilation: `npm run type-check` (exits with code 0)
+- Production Webpack build: `npm run build` (verifies all static and dynamic routes and service worker bundling)
