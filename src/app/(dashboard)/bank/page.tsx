@@ -173,14 +173,6 @@ export default function QuestionBankPage() {
               {filteredQuestions.length}
             </span>
           </div>
-
-          <Link
-            href="/admin/questions"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3.5 py-3 text-xs font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 transition-colors"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
-            <span>+ Ingest Questions</span>
-          </Link>
         </div>
       </section>
 

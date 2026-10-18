@@ -15,18 +15,11 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Target,
   GraduationCap,
   BookOpen,
   Clock,
-  CreditCard,
   Flame,
-  BarChart3,
-  ShieldCheck,
-  ArrowLeft,
-  Lock,
   TrendingUp,
-  Database,
 } from "lucide-react";
 import { UserProfile } from "@/types/user";
 import AuthModal from "@/components/auth/AuthModal";
@@ -53,11 +46,6 @@ export default function Sidebar({
   const pathname = usePathname();
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  const isAdminRoute = Boolean(pathname?.startsWith("/admin"));
-
-  // ==========================================
-  // 1. STUDENT PORTAL NAVIGATION
-  // ==========================================
   const studentNav = [
     {
       name: "Dashboard",
@@ -110,94 +98,33 @@ export default function Sidebar({
     },
   ];
 
-  // ==========================================
-  // 2. ADMIN PORTAL NAVIGATION
-  // ==========================================
-  const adminNav = [
-    {
-      name: "Admin Command",
-      href: "/admin",
-      icon: ShieldCheck,
-      active: pathname === "/admin",
-    },
-    {
-      name: "Payment Slips",
-      href: "/admin/payments",
-      icon: CreditCard,
-      active: pathname === "/admin/payments",
-      badge: "CBE/Tele",
-    },
-    {
-      name: "Question Bank",
-      href: "/admin/questions",
-      icon: Database,
-      active: pathname === "/admin/questions",
-    },
-    {
-      name: "Platform Telemetry",
-      href: "/admin/analytics",
-      icon: BarChart3,
-      active: pathname === "/admin/analytics",
-    },
-  ];
-
-  const handleLockAdminSession = () => {
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("qelem_admin_key");
-      window.location.href = "/admin";
-    }
-  };
-
   const sidebarContent = (
     <div className="flex h-full flex-col justify-between overflow-y-auto">
       {/* Top Section: Brand + Navigation */}
       <div className="space-y-6">
         {/* Brand Header */}
         <div className="flex items-center justify-between border-b border-neutral-200/80 p-4 sm:p-5">
-          {isAdminRoute ? (
-            <Link
-              href="/admin"
-              onClick={onMobileClose}
-              className="group flex items-center gap-3"
-            >
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-white shadow-sm transition-transform group-hover:scale-105">
-                <ShieldCheck className="h-5 w-5 text-emerald-400" />
-              </div>
+          <Link
+            href="/dashboard"
+            onClick={onMobileClose}
+            className="group flex items-center gap-3"
+          >
+            <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-white shadow-sm transition-transform group-hover:scale-105">
+              <Bookmark className="h-4.5 w-4.5 fill-white/20 text-white" />
+              <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+            </div>
 
-              {!isCollapsed && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base font-bold tracking-tight text-neutral-950">
-                    Qelem Admin
-                  </span>
-                  <span className="rounded-md bg-neutral-900 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                    STAFF
-                  </span>
-                </div>
-              )}
-            </Link>
-          ) : (
-            <Link
-              href="/dashboard"
-              onClick={onMobileClose}
-              className="group flex items-center gap-3"
-            >
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-neutral-950 text-white shadow-sm transition-transform group-hover:scale-105">
-                <Bookmark className="h-4.5 w-4.5 fill-white/20 text-white" />
-                <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+            {!isCollapsed && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-base font-bold tracking-tight text-neutral-950">
+                  Qelem
+                </span>
+                <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-600 border border-neutral-200/70">
+                  «ቀለም»
+                </span>
               </div>
-
-              {!isCollapsed && (
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base font-bold tracking-tight text-neutral-950">
-                    Qelem
-                  </span>
-                  <span className="rounded-md bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-600 border border-neutral-200/70">
-                    «ቀለም»
-                  </span>
-                </div>
-              )}
-            </Link>
-          )}
+            )}
+          </Link>
 
           {/* Desktop Collapse Toggle */}
           {onToggleCollapse && (
@@ -227,202 +154,99 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Navigation Section */}
-        <div className="px-3 sm:px-4 space-y-5">
-          {isAdminRoute ? (
-            /* ================= ADMIN NAVIGATION ================= */
-            <div className="space-y-4">
-              <div className="px-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400">
-                  Management Console
-                </span>
-              </div>
-              <nav className="space-y-1">
-                {adminNav.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      onClick={onMobileClose}
-                      className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
-                        item.active
-                          ? "bg-neutral-950 text-white shadow-sm"
-                          : "text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950"
-                      } ${isCollapsed ? "justify-center px-2" : ""}`}
-                      title={isCollapsed ? item.name : undefined}
-                    >
-                      <Icon
-                        className={`h-4 w-4 shrink-0 transition-transform ${
-                          item.active
-                            ? "text-emerald-400"
-                            : "text-neutral-400 group-hover:text-neutral-700"
-                        }`}
-                      />
-                      {!isCollapsed && (
-                        <div className="flex items-center justify-between w-full">
-                          <span>{item.name}</span>
-                          {item.badge && (
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                                item.active
-                                  ? "bg-white/20 text-white"
-                                  : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              {/* Quick switch to student view */}
-              <div className="pt-3 border-t border-neutral-100">
+        {/* Navigation Items */}
+        <div className="px-3 sm:px-4 space-y-4">
+          <nav className="space-y-1">
+            {studentNav.map((item) => {
+              const Icon = item.icon;
+              return (
                 <Link
-                  href="/dashboard"
-                  onClick={onMobileClose}
-                  className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950 transition-all ${
-                    isCollapsed ? "justify-center px-2" : ""
-                  }`}
-                  title="Switch to Student Portal"
-                >
-                  <ArrowLeft className="h-4 w-4 shrink-0 text-neutral-400 group-hover:text-neutral-700" />
-                  {!isCollapsed && <span>Exit to Student App</span>}
-                </Link>
-              </div>
-            </div>
-          ) : (
-            /* ================= STUDENT NAVIGATION ================= */
-            <div className="space-y-4">
-              <nav className="space-y-1">
-                {studentNav.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      onClick={onMobileClose}
-                      className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
-                        item.active
-                          ? "bg-indigo-600 text-white shadow-sm"
-                          : "text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950"
-                      } ${isCollapsed ? "justify-center px-2" : ""}`}
-                      title={isCollapsed ? item.name : undefined}
-                    >
-                      <Icon
-                        className={`h-4 w-4 shrink-0 transition-transform ${
-                          item.active
-                            ? "text-white"
-                            : "text-neutral-400 group-hover:text-neutral-700"
-                        }`}
-                      />
-                      {!isCollapsed && (
-                        <div className="flex items-center justify-between w-full">
-                          <span>{item.name}</span>
-                          {item.badge && (
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
-                                item.active
-                                  ? "bg-white/25 text-white"
-                                  : "bg-amber-100 text-amber-800"
-                              }`}
-                            >
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </Link>
-                  );
-                })}
-              </nav>
-
-              {/* Community & Settings */}
-              <div className="space-y-1 pt-2 border-t border-neutral-100">
-                <a
-                  href="https://t.me/qelem_edu"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950 transition-all ${
-                    isCollapsed ? "justify-center px-2" : ""
-                  }`}
-                  title="Join @qelem_edu on Telegram"
-                >
-                  <Send className="h-4 w-4 shrink-0 text-blue-500 transition-transform group-hover:scale-105" />
-                  {!isCollapsed && (
-                    <div className="flex items-center justify-between w-full">
-                      <span>Telegram Community</span>
-                      <span className="text-[10px] text-neutral-400 font-mono">
-                        @qelem_edu
-                      </span>
-                    </div>
-                  )}
-                </a>
-
-                <Link
-                  href="/settings"
+                  key={item.name}
+                  href={item.href}
                   onClick={onMobileClose}
                   className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
-                    pathname === "/settings"
+                    item.active
                       ? "bg-indigo-600 text-white shadow-sm"
                       : "text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950"
                   } ${isCollapsed ? "justify-center px-2" : ""}`}
-                  title={isCollapsed ? "Settings" : undefined}
+                  title={isCollapsed ? item.name : undefined}
                 >
-                  <Settings
+                  <Icon
                     className={`h-4 w-4 shrink-0 transition-transform ${
-                      pathname === "/settings"
+                      item.active
                         ? "text-white"
                         : "text-neutral-400 group-hover:text-neutral-700"
                     }`}
                   />
-                  {!isCollapsed && <span>Settings</span>}
-                </Link>
-
-                {/* Discrete Admin Link for Staff */}
-                <Link
-                  href="/admin"
-                  onClick={onMobileClose}
-                  className={`group flex items-center gap-3 rounded-xl px-3 py-2 text-xs font-semibold text-neutral-500 hover:bg-neutral-100/80 hover:text-neutral-950 transition-all ${
-                    isCollapsed ? "justify-center px-2" : ""
-                  }`}
-                  title="Admin Command Console"
-                >
-                  <ShieldCheck className="h-4 w-4 shrink-0 text-neutral-400 group-hover:text-neutral-700" />
                   {!isCollapsed && (
                     <div className="flex items-center justify-between w-full">
-                      <span>Admin Console</span>
-                      <span className="text-[9px] font-bold bg-neutral-100 text-neutral-600 px-1.5 py-0.5 rounded-md">
-                        Staff
-                      </span>
+                      <span>{item.name}</span>
+                      {item.badge && (
+                        <span
+                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                            item.active
+                              ? "bg-white/25 text-white"
+                              : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
                     </div>
                   )}
                 </Link>
-              </div>
-            </div>
-          )}
+              );
+            })}
+          </nav>
+
+          {/* Community & Settings Section */}
+          <div className="space-y-1 pt-2 border-t border-neutral-100">
+            <a
+              href="https://t.me/qelem_edu"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950 transition-all ${
+                isCollapsed ? "justify-center px-2" : ""
+              }`}
+              title="Join @qelem_edu on Telegram"
+            >
+              <Send className="h-4 w-4 shrink-0 text-blue-500 transition-transform group-hover:scale-105" />
+              {!isCollapsed && (
+                <div className="flex items-center justify-between w-full">
+                  <span>Telegram Community</span>
+                  <span className="text-[10px] text-neutral-400 font-mono">
+                    @qelem_edu
+                  </span>
+                </div>
+              )}
+            </a>
+
+            <Link
+              href="/settings"
+              onClick={onMobileClose}
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
+                pathname === "/settings"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950"
+              } ${isCollapsed ? "justify-center px-2" : ""}`}
+              title={isCollapsed ? "Settings" : undefined}
+            >
+              <Settings
+                className={`h-4 w-4 shrink-0 transition-transform ${
+                  pathname === "/settings"
+                    ? "text-white"
+                    : "text-neutral-400 group-hover:text-neutral-700"
+                }`}
+              />
+              {!isCollapsed && <span>Settings</span>}
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Bottom Section: Sign In / Sign Out / Admin Lock */}
+      {/* Bottom Section: Candidate Sign In / Sign Out */}
       <div className="p-3 sm:p-4 border-t border-neutral-200/80">
-        {isAdminRoute ? (
-          <button
-            type="button"
-            onClick={handleLockAdminSession}
-            className={`group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 transition-all cursor-pointer ${
-              isCollapsed ? "justify-center px-2" : ""
-            }`}
-            title="Lock Admin Console"
-          >
-            <Lock className="h-4 w-4 shrink-0 text-neutral-500" />
-            {!isCollapsed && <span>Lock Admin Console</span>}
-          </button>
-        ) : isAuthenticated ? (
+        {isAuthenticated ? (
           <button
             type="button"
             onClick={onSignOut}

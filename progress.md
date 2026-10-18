@@ -101,25 +101,29 @@
 
 ## Execution Log & Audit Trail
 
-### Milestone: Strict Separation of Student & Admin Dashboards & Page Assignment (October 18, 2026)
-- **Scope:** Complete architectural partition of the candidate learning application and the staff administrative command center.
-- **Portals Created & Partitioned:**
-  - **Student Portal:** Dedicated to candidate study goals (`/dashboard`, `/mistakes`, `/analytics`, `/analytics/report/[id]`, `/learn`, `/bank`, `/mock-exams`, `/mock-exams/[examId]`, `/practice`, `/study-plan`, `/settings`).
-  - **Admin Command Portal:** Dedicated to staff supervision (`/admin`, `/admin/payments`, `/admin/questions`, `/admin/analytics`).
+### Milestone: Zero-Leak Student & Admin Portals with Standalone Layouts (October 18, 2026)
+- **Scope:** Physical and code-level segregation of the candidate application from the staff administrative portal, eliminating 100% of administrative references from student-facing screens.
+- **Portals Created & Strictly Partitioned:**
+  - **Student Portal (`src/app/(dashboard)`):**
+    - Contains **zero admin links, zero staff badges, zero "+ Ingest Questions" buttons, and zero administrative indicators**.
+    - Pure candidate learning focus: `/dashboard`, `/mistakes`, `/analytics`, `/analytics/report/[id]`, `/learn`, `/bank`, `/mock-exams`, `/mock-exams/[examId]`, `/practice`, `/study-plan`, `/settings`.
+  - **Admin Command Portal (`src/app/admin`):**
+    - Physically moved out of `(dashboard)` into its own isolated route directory: `/admin`, `/admin/payments`, `/admin/questions`, `/admin/analytics`.
+    - Has its own isolated `AdminLayout.tsx` and dark executive `AdminSidebar.tsx`, completely decoupled from student UI code.
 - **Files Created:**
-  - [`src/app/(dashboard)/admin/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/admin/page.tsx): Executive Admin Command Center featuring Gross Platform Revenue in ETB, pending CBE/Telebirr slip counters, question inventory, CBT attempts, live review queue preview, and passkey authentication.
-  - [`src/app/(dashboard)/admin/analytics/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/admin/analytics/page.tsx): Institutional platform telemetry analyzing nationwide student pass rates, revenue streams, and top failed curriculum units nationwide.
-- **Files Enhanced:**
-  - [`src/components/dashboard/Sidebar.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/components/dashboard/Sidebar.tsx): Implemented dual-mode navigation engine:
-    - In Admin mode (`/admin/*`): Renders administrative console links (*Admin Command*, *Payment Slips*, *Question Bank*, *Platform Telemetry*) with quick "Exit to Student App" action.
-    - In Student mode: Renders complete student curriculum links (*Dashboard*, *Mistake Bank*, *Analytics*, *Learning*, *Bank*, *Mock Exams*, *Test*, *Study Plans*, *Settings*).
-  - [`src/app/(dashboard)/layout.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/layout.tsx): Context-aware sticky header displaying "Qelem Administration / Executive Console" in admin mode, and academic grade/stream details with exam countdown in student mode.
-  - [`overview.md`](file:///c:/Users/emwod/Downloads/Qelem/overview.md): Added Section 4 detailing the full Page Assignment Matrix across all 26 platform routes.
+  - [`src/app/admin/layout.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/admin/layout.tsx): Dedicated Admin layout with staff header and passkey status.
+  - [`src/components/admin/AdminSidebar.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/components/admin/AdminSidebar.tsx): Dedicated executive sidebar with Admin Command, Payment Slips (live CBE/Telebirr badge), Question Bank, and Platform Telemetry.
+  - [`src/app/admin/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/admin/page.tsx): Executive Admin Command Center featuring Gross Platform Revenue in ETB, pending CBE/Telebirr slip counters, question inventory, CBT attempts, live review queue preview, and passkey authentication.
+  - [`src/app/admin/analytics/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/admin/analytics/page.tsx): Institutional platform telemetry analyzing nationwide student pass rates, revenue streams, and top failed curriculum units nationwide.
+- **Files Cleaned (Zero-Leak Student Experience):**
+  - [`src/components/dashboard/Sidebar.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/components/dashboard/Sidebar.tsx): Stripped all admin links, staff badges, and admin conditionals; 100% focused on student navigation.
+  - [`src/app/(dashboard)/layout.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/layout.tsx): Removed all admin route checks and headers; displays candidate Grade, Stream, and countdown.
+  - [`src/app/(dashboard)/bank/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/bank/page.tsx): Removed "+ Ingest Questions" admin link from the student question bank.
 - **Verification:**
   - TypeScript type-check passed (`npm run lint` -> 0 errors).
   - Production build passed (`npm run build` -> 26 routes bundled successfully).
 - **Rollback Instructions:**
-  To revert Student/Admin dashboard separation changes back to Phase 3 checkpoint:
+  To revert to Phase 3 checkpoint:
   ```bash
   git reset --hard eddc94c
   ```

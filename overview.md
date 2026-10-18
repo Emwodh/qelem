@@ -124,13 +124,17 @@ flowchart LR
 
 ## 4. Portal Architecture & Complete Page Assignment (Student vs. Admin)
 
-To provide an optimal user experience for Ethiopian candidates while maintaining professional, secure tools for administrators, the entire platform is partitioned into two distinct portals with contextual headers, isolated sidebars, and dedicated dashboards:
+To provide an optimal user experience for Ethiopian candidates while maintaining professional, secure tools for administrators, the entire platform is partitioned into two completely isolated portals with zero bleed-through:
+- **Zero-Leak Student Experience:** Candidates browsing the Student Portal (`src/app/(dashboard)`) have **zero exposure** to administrative controls. There are no admin links, no staff badges, no "+ Ingest Questions" buttons, and no administrative indicators anywhere in their sidebar, header, or question rooms.
+- **Dedicated Admin Command Portal:** All administrative pages reside in an isolated route tree (`src/app/admin/`) with its own dedicated layout (`AdminLayout.tsx`) and dark executive sidebar (`AdminSidebar.tsx`), guarded by SHA-256 passkey verification.
 
 ### Portal Comparison Matrix
 
 | Feature / Domain | Student Portal (`/dashboard`, etc.) | Admin Command Portal (`/admin`, etc.) |
 | :--- | :--- | :--- |
 | **Primary Audience** | Grade 9–12 Ethiopian Candidates & Takers | Platform Operators, Teachers & SMEs |
+| **Directory Isolation** | `src/app/(dashboard)/*` | `src/app/admin/*` |
+| **Navigation & Layout** | `Sidebar.tsx` + `DashboardLayout.tsx` | `AdminSidebar.tsx` + `AdminLayout.tsx` |
 | **Theme & Aesthetic** | Learning-focused, Indigo/Emerald accents, countdown | High-contrast administrative dark console & amber alerts |
 | **Security Layer** | Candidate Session Auth (Supabase / Phone) | Passkey Gate (`x-admin-key` & HMAC validation) |
 | **Dashboard Focus** | Readiness score, daily streaks, weakness drills | Gross revenue (ETB), pending slips, question bank stats |
