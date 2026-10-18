@@ -15,6 +15,16 @@ export interface UserProfile {
   weakestTopic: string;
   predictedTier: string;
   isAuthenticated?: boolean;
+  isPro?: boolean;
+  plan?: "FREE" | "MONTHLY_PASS" | "MATRIC_SEASON_PASS" | "LIFETIME_PASS";
+  pendingPayment?: {
+    txRef: string;
+    bankTxRef: string;
+    method: "telebirr" | "cbe";
+    amountETB: number;
+    submittedAt: string;
+    status: "MANUAL_REVIEW" | "COMPLETED" | "REJECTED";
+  };
 }
 
 export interface SubjectMastery {

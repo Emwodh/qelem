@@ -19,6 +19,7 @@ import {
   GraduationCap,
   BookOpen,
   Clock,
+  CreditCard,
 } from "lucide-react";
 import { UserProfile } from "@/types/user";
 import AuthModal from "@/components/auth/AuthModal";
@@ -222,6 +223,34 @@ export default function Sidebar({
                   }`}
                 />
                 {!isCollapsed && <span>Settings</span>}
+              </Link>
+
+              {/* Admin Payment Verification */}
+              <Link
+                href="/admin/payments"
+                onClick={onMobileClose}
+                className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
+                  pathname?.startsWith("/admin/payments")
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-neutral-600 hover:bg-neutral-100/80 hover:text-neutral-950"
+                } ${isCollapsed ? "justify-center px-2" : ""}`}
+                title={isCollapsed ? "Payment Verification" : undefined}
+              >
+                <CreditCard
+                  className={`h-4 w-4 shrink-0 transition-transform ${
+                    pathname?.startsWith("/admin/payments")
+                      ? "text-white"
+                      : "text-neutral-400 group-hover:text-neutral-700"
+                  }`}
+                />
+                {!isCollapsed && (
+                  <div className="flex items-center justify-between w-full">
+                    <span>Payment Slips</span>
+                    <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-full">
+                      CBE/Tele
+                    </span>
+                  </div>
+                )}
               </Link>
             </nav>
           </div>

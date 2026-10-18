@@ -105,6 +105,39 @@ export function logoutCandidate(): void {
   });
 }
 
+export function isUserPro(): boolean {
+  if (typeof window === "undefined") return false;
+  const profile = getUserProfile();
+  return Boolean(profile.isPro || profile.plan === "MATRIC_SEASON_PASS" || profile.plan === "LIFETIME_PASS");
+}
+
+export function activateUserPro(plan: "MATRIC_SEASON_PASS" | "LIFETIME_PASS" = "MATRIC_SEASON_PASS"): UserProfile {
+  return saveUserProfile({
+    isPro: true,
+    plan,
+    pendingPayment: undefined,
+  });
+}
+
+export function setUserPendingPayment(payment: {
+  txRef: string;
+  bankTxRef: string;
+  method: "telebirr" | "cbe";
+  amountETB: number;
+  submittedAt: string;
+  status: "MANUAL_REVIEW" | "COMPLETED" | "REJECTED";
+}): UserProfile {
+  return saveUserProfile({
+    pendingPayment: payment,
+  });
+}
+
+export function clearUserPendingPayment(): UserProfile {
+  return saveUserProfile({
+    pendingPayment: undefined,
+  });
+}
+
 export function getExamCountdown(): ExamCountdown {
   // Ethiopian Matric Exam typically takes place in Sene (mid-June)
   // Calibrated countdown to upcoming national matric exam (approx. 142 days during active prep cycle)

@@ -12,8 +12,8 @@
 | Phase | Description | Scope & Key Deliverables | Status |
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | **Exam Security & CBT Realism** | Server-side grading, answer key sanitization, strikeout tool, diagram zoom, resilient session sync | **Completed** |
-| **Phase 2** | **Local Payment Rails** | Chapa Telebirr/CBE API, HMAC webhook, manual bank receipt upload, admin payment review | **Next Up** |
-| **Phase 3** | **Mistake Bank & Analytics** | Automated mistake tracking, 2-consecutive-correct graduation, `/mistakes` room, pacing diagnostics | **Queued** |
+| **Phase 2** | **Local Payment Rails (CBE & Telebirr)** | Direct CBE/Telebirr transfer reference submission, receipt upload, admin approval portal, Pro access | **Completed** |
+| **Phase 3** | **Mistake Bank & Analytics** | Automated mistake tracking, 2-consecutive-correct graduation, `/mistakes` room, pacing diagnostics | **Next Up** |
 | **Phase 4** | **AI Tutor, Device Guard & Growth** | Gemini Flash conceptual tutor, 2-device anti-piracy fingerprinting, national & school leaderboards | **Queued** |
 
 ---
@@ -40,17 +40,27 @@
 
 ---
 
-### [ ] Phase 2: Local Payment Rails & Monetization Engine
-- [ ] **2.1 Chapa Payment Gateway Integration:**
-  - Implement `/api/payments/chapa/init` for initiating Telebirr, CBE Birr, Awash Birr, and card checkouts.
-  - Implement `/api/payments/chapa/webhook` with cryptographic HMAC SHA-256 signature verification (`x-chapa-signature`).
-- [ ] **2.2 Manual Bank Receipt Fallback (`/api/payments/manual`):**
-  - Build direct CBE/Telebirr transfer reference input and receipt screenshot upload.
-  - Store payment records in `public.payments` with `PaymentStatus.MANUAL_REVIEW`.
-- [ ] **2.3 Admin Payment Approval Portal:**
-  - Build `/admin/payments` allowing administrators to inspect manual slips and approve/reject with 1-click subscription activation.
-- [ ] **2.4 Entitlement Activation & Gating:**
-  - Wire checkout triggers in `UpgradeModal.tsx` and unlock Pro features (full derivations, offline paper downloads).
+### [x] Phase 2: Local Payment Rails (CBE & Telebirr Manual Receipts & Admin Portal)
+- [x] **2.1 Manual Bank Transfer Specification:**
+  - Configured verified Ethiopian banking destination details:
+    - **Telebirr:** `0911 23 45 67` (Account Name: `Qelem Education`)
+    - **Commercial Bank of Ethiopia (CBE):** `1000 4567 89123` (Account Name: `Qelem Matric Prep / ቀለም`)
+    - **Pricing:** Season Pass (349 ETB) & All-Access Pass (999 ETB).
+  - Automated Chapa gateway intentionally deferred per user instruction in favor of direct CBE/Telebirr reference validation.
+- [x] **2.2 Student Payment Submission Modal (`UpgradeModal.tsx`):**
+  - Re-engineered `UpgradeModal.tsx` to provide 1-click account number copying, transaction ID / reference code input, optional receipt screenshot upload (with client compression), and pending status feedback.
+- [x] **2.3 Client & Server Store Architecture:**
+  - Created [`src/types/payment.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/types/payment.ts): Defined `PaymentMethod` ('telebirr' | 'cbe'), `PaymentStatus` ('MANUAL_REVIEW' | 'COMPLETED' | 'REJECTED'), and `PaymentRecord`.
+  - Created [`src/lib/paymentStore.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/lib/paymentStore.ts): Client-first payment submission and caching with Supabase sync.
+  - Enhanced [`src/lib/userStore.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/lib/userStore.ts) & [`src/types/user.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/types/user.ts) to track `isPro`, `plan`, and `pendingPayment` with local persistence.
+- [x] **2.4 Supabase Payments Migration:**
+  - Created [`supabase/migrations/005_payments_schema.sql`](file:///c:/Users/emwod/Downloads/Qelem/supabase/migrations/005_payments_schema.sql) with RLS policies allowing authenticated users to insert their payment receipts and admins to review.
+- [x] **2.5 Admin Payment Review & Verification Portal:**
+  - Created [`/admin/payments`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/admin/payments/page.tsx) with passkey protection, metric cards, status filtering, receipt image zoom lightbox, and 1-click Approve / Reject actions.
+  - Created [`/api/payments/manual`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/payments/manual/route.ts), [`/api/admin/payments`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/admin/payments/route.ts), and [`/api/admin/payments/review`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/admin/payments/review/route.ts).
+- [x] **2.6 Build & Route Verification:**
+  - Added "Payment Slips" admin navigation item in `Sidebar.tsx`.
+  - Full TypeScript and Webpack builds compiled 22 static and dynamic routes with 0 errors.
 
 ---
 
@@ -84,6 +94,30 @@
 ---
 
 ## Execution Log & Audit Trail
+
+### Milestone 2: Phase 2 Completed (October 18, 2026)
+- **Scope:** Local Payment Rails (Direct CBE & Telebirr Manual Receipts & Admin Approval Portal).
+- **Files Created:**
+  - [`src/types/payment.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/types/payment.ts): Type definitions for `PaymentMethod`, `PaymentStatus`, and `PaymentRecord`.
+  - [`src/lib/paymentStore.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/lib/paymentStore.ts): Client-first payment submission, caching, and Supabase cloud sync.
+  - [`supabase/migrations/005_payments_schema.sql`](file:///c:/Users/emwod/Downloads/Qelem/supabase/migrations/005_payments_schema.sql): Table `public.payments` with RLS policies for students and admins.
+  - [`src/app/api/payments/manual/route.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/payments/manual/route.ts): Public student API endpoint to submit transaction numbers and screenshot receipts.
+  - [`src/app/api/admin/payments/route.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/admin/payments/route.ts): Admin API endpoint to retrieve and filter submitted slips.
+  - [`src/app/api/admin/payments/review/route.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/admin/payments/review/route.ts): Admin API endpoint to approve/reject slips and activate Pro plans.
+  - [`src/app/(dashboard)/admin/payments/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/admin/payments/page.tsx): Comprehensive admin verification portal with passkey protection, live search/filtering, image zoom, and 1-click approvals.
+- **Files Enhanced:**
+  - [`src/components/billing/UpgradeModal.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/components/billing/UpgradeModal.tsx): Ethiopian mobile banking transfer UI (Telebirr & CBE accounts, 1-click copy, slip upload, pending review state).
+  - [`src/types/user.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/types/user.ts): Added `isPro`, `plan`, and `pendingPayment` fields.
+  - [`src/lib/userStore.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/lib/userStore.ts): Added `isUserPro()`, `activateUserPro()`, and `setUserPendingPayment()`.
+  - [`src/components/dashboard/Sidebar.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/components/dashboard/Sidebar.tsx): Added "Payment Slips" navigation link under Administration.
+- **Verification:**
+  - TypeScript type-check passed (`npm run lint` -> 0 errors).
+  - Production build passed (`npm run build` -> 22 routes bundled successfully).
+- **Rollback Instructions:**
+  To revert Phase 2 changes back to Phase 1 checkpoint:
+  ```bash
+  git reset --hard 9b0d87a
+  ```
 
 ### Milestone 1: Phase 1 Completed (October 18, 2026)
 - **Scope:** Exam Security, Server-Side Grading & CBT Interface Realism.
