@@ -117,8 +117,8 @@ flowchart LR
 | `public.questions` | Active | Curriculum and past exam questions with KaTeX prompts, options, explanations |
 | `public.practice_sessions` | Active | Baseline diagnostic sprint attempts |
 | `public.mock_exam_sessions` | Active | Full-length 60-question CBT exam attempts and timing logs |
-| `public.mistake_bank` | Phase 3 | Personalized mistake bank with fail count and consecutive correct tracking |
-| `public.payments` | Phase 2 | Chapa transaction logs and manual CBE/Telebirr receipt reviews |
+| `public.mistake_bank` | Active | Personalized mistake bank with fail count and consecutive correct tracking |
+| `public.payments` | Active | CBE/Telebirr receipt reviews and monetization transaction logs |
 | `public.coupons` | Phase 2 | Promo and campus ambassador discount codes |
 | `public.device_sessions` | Phase 4 | Browser fingerprint hash and active session locks |
 

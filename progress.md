@@ -13,8 +13,8 @@
 | :--- | :--- | :--- | :--- |
 | **Phase 1** | **Exam Security & CBT Realism** | Server-side grading, answer key sanitization, strikeout tool, diagram zoom, resilient session sync | **Completed** |
 | **Phase 2** | **Local Payment Rails (CBE & Telebirr)** | Direct CBE/Telebirr transfer reference submission, receipt upload, admin approval portal, Pro access | **Completed** |
-| **Phase 3** | **Mistake Bank & Analytics** | Automated mistake tracking, 2-consecutive-correct graduation, `/mistakes` room, pacing diagnostics | **Next Up** |
-| **Phase 4** | **AI Tutor, Device Guard & Growth** | Gemini Flash conceptual tutor, 2-device anti-piracy fingerprinting, national & school leaderboards | **Queued** |
+| **Phase 3** | **Mistake Bank & Analytics** | Automated mistake tracking, 2-consecutive-correct graduation, `/mistakes` room, pacing diagnostics | **Completed** |
+| **Phase 4** | **AI Tutor, Device Guard & Growth** | Gemini Flash conceptual tutor, 2-device anti-piracy fingerprinting, national & school leaderboards | **Next Up** |
 
 ---
 
@@ -64,19 +64,25 @@
 
 ---
 
-### [ ] Phase 3: Automated Mistake Bank, Spaced Repetition & Deep Analytics
-- [ ] **3.1 Automated Mistake Ingestion:**
-  - Create `public.mistake_bank` schema in Supabase.
-  - Automatically record failed questions upon submission of practice sessions or mock exams.
-- [ ] **3.2 Spaced Repetition Graduation Engine:**
-  - Track `failCount` and `consecutiveCorrect`.
-  - Enforce the 2-consecutive-correct graduation rule on separate sessions before removing a question from the mistake bank.
-- [ ] **3.3 Dedicated Practice Drill Room (`/mistakes`):**
-  - Build interactive `/mistakes` drill room allowing targeted revision of flagged and failed items.
-- [ ] **3.4 Standalone Post-Exam Analytics (`/analytics`, `/analytics/report/[id]`):**
-  - Post-exam diagnostic breakdown with pacing telemetry (average time per question, time sink questions >4 mins).
-  - Grade 9–12 Unit mastery table with 1-click *"Practice 15 Weak Questions Now"* CTA.
-  - Estimated matric aggregate score (out of 600/700) compared to university cut-off thresholds (AAU Medicine, AAiT Engineering, Law).
+### [x] Phase 3: Automated Mistake Bank, Spaced Repetition & Deep Analytics
+- [x] **3.1 Automated Mistake Ingestion:**
+  - Created [`supabase/migrations/006_mistake_bank_schema.sql`](file:///c:/Users/emwod/Downloads/Qelem/supabase/migrations/006_mistake_bank_schema.sql) with table `public.mistake_bank` and full RLS policies.
+  - Wired `/api/exams/[id]/submit` to automatically upsert incorrect questions and advance graduation streaks for authenticated candidates.
+- [x] **3.2 Spaced Repetition Graduation Engine:**
+  - Created [`src/types/mistake.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/types/mistake.ts) and [`src/lib/mistakeStore.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/lib/mistakeStore.ts).
+  - Enforces the 2-consecutive-correct graduation rule: questions must be solved correctly 2 consecutive times across sessions to be cleared from active weaknesses.
+- [x] **3.3 Dedicated Interactive Mistake Drill Room (`/mistakes`):**
+  - Created [`/mistakes`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/mistakes/page.tsx) with overview cards (Total Logged, Active Weaknesses, 1 Step to Graduate, Mastered/Graduated), subject filter tabs, and interactive in-browser drill sessions with instant derivation feedback and streak tracking.
+- [x] **3.4 Standalone Analytics & Post-Exam Diagnostics:**
+  - Created [`/analytics`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/analytics/page.tsx) featuring:
+    - Pacing telemetry (seconds/question, speed vs accuracy conditioning quadrants).
+    - Grade 9–12 four-year curriculum mastery distribution.
+    - Projected national aggregate score out of 600 (Natural) or 700 (Social) compared against historical Addis Ababa University (AAU) Medicine and AAiT Engineering cut-offs.
+  - Created [`/analytics/report/[id]`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/analytics/report/[id]/page.tsx) providing deep post-exam diagnostics with chapter breakdown tables, weak-unit 1-click drill CTAs, and step-by-step KaTeX solutions.
+- [x] **3.5 Navigation & Build Verification:**
+  - Added "Mistake Bank" and "Analytics" links to `Sidebar.tsx` with high-visibility badges.
+  - Linked post-exam score banner directly to `/analytics/report/[examDef.id]` and `/mistakes`.
+  - TypeScript type-checking and Next.js Webpack production build compiled 24 routes with 0 errors.
 
 ---
 
@@ -94,6 +100,28 @@
 ---
 
 ## Execution Log & Audit Trail
+
+### Milestone 3: Phase 3 Completed (October 18, 2026)
+- **Scope:** Automated Mistake Bank, Spaced Repetition (2-Consecutive-Correct Graduation) & Deep Post-Exam Analytics.
+- **Files Created:**
+  - [`src/types/mistake.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/types/mistake.ts): Type definitions for `MistakeBankItem`, `MistakeBankStats`, and `MistakeDrillResult`.
+  - [`supabase/migrations/006_mistake_bank_schema.sql`](file:///c:/Users/emwod/Downloads/Qelem/supabase/migrations/006_mistake_bank_schema.sql): Table `public.mistake_bank` with RLS policies and performance indices.
+  - [`src/lib/mistakeStore.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/lib/mistakeStore.ts): Client-first store with local persistence, batch sync, and cloud synchronization.
+  - [`src/app/(dashboard)/mistakes/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/mistakes/page.tsx): Interactive drill room with instant KaTeX feedback and graduation progress.
+  - [`src/app/(dashboard)/analytics/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/analytics/page.tsx): National entrance readiness dashboard, pacing velocity, and AAU cut-off predictor.
+  - [`src/app/(dashboard)/analytics/report/[id]/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/analytics/report/[id]/page.tsx): Individual session diagnostic report with unit mastery tables and step-by-step solutions.
+- **Files Enhanced:**
+  - [`src/app/api/exams/[id]/submit/route.ts`](file:///c:/Users/emwod/Downloads/Qelem/src/app/api/exams/[id]/submit/route.ts): Server-side ingestion of missed items into `mistake_bank` and streak advancement for correct answers.
+  - [`src/app/(dashboard)/mock-exams/[examId]/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/mock-exams/[examId]/page.tsx): Client-side batch mistake synchronization upon exam submission; added Diagnostic Report and Mistake Bank CTA buttons.
+  - [`src/components/dashboard/Sidebar.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/components/dashboard/Sidebar.tsx): Added Mistake Bank and Analytics navigation items.
+- **Verification:**
+  - TypeScript type-check passed (`npm run lint` -> 0 errors).
+  - Production build passed (`npm run build` -> 24 routes bundled successfully).
+- **Rollback Instructions:**
+  To revert Phase 3 changes back to Phase 2 checkpoint:
+  ```bash
+  git reset --hard 4bfdad7
+  ```
 
 ### Milestone 2: Phase 2 Completed (October 18, 2026)
 - **Scope:** Local Payment Rails (Direct CBE & Telebirr Manual Receipts & Admin Approval Portal).

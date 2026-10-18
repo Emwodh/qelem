@@ -20,6 +20,8 @@ import {
   BookOpen,
   Clock,
   CreditCard,
+  Flame,
+  BarChart3,
 } from "lucide-react";
 import { UserProfile } from "@/types/user";
 import AuthModal from "@/components/auth/AuthModal";
@@ -52,6 +54,19 @@ export default function Sidebar({
       href: "/dashboard",
       icon: LayoutDashboard,
       active: pathname === "/dashboard",
+    },
+    {
+      name: "Mistake Bank",
+      href: "/mistakes",
+      icon: Flame,
+      active: pathname?.startsWith("/mistakes"),
+      badge: "Spaced",
+    },
+    {
+      name: "Analytics",
+      href: "/analytics",
+      icon: BarChart3,
+      active: pathname?.startsWith("/analytics"),
     },
     {
       name: "Learning",
@@ -173,7 +188,22 @@ export default function Sidebar({
                           : "text-neutral-400 group-hover:text-neutral-700"
                       }`}
                     />
-                    {!isCollapsed && <span>{item.name}</span>}
+                    {!isCollapsed && (
+                      <div className="flex items-center justify-between w-full">
+                        <span>{item.name}</span>
+                        {(item as any).badge && (
+                          <span
+                            className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${
+                              item.active
+                                ? "bg-white/25 text-white"
+                                : "bg-amber-100 text-amber-800"
+                            }`}
+                          >
+                            {(item as any).badge}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </Link>
                 );
               })}

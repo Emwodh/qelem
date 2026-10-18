@@ -25,11 +25,14 @@ import {
   ZoomIn,
   X,
   Loader2,
+  Flame,
+  TrendingUp,
 } from "lucide-react";
 import { OFFICIAL_MOCK_EXAMS, getQuestionsForExam, saveActiveAttempt, getActiveAttempt, clearActiveAttempt } from "@/lib/mockExamData";
 import { MockExamDefinition, MockExamAttempt } from "@/types/exam";
 import { ExamQuestion } from "@/types/curriculum";
 import { MathRenderer } from "@/components/ui/MathRenderer";
+import { recordMistakeBatch } from "@/lib/mistakeStore";
 
 export default function ExamTestRoomPage() {
   const params = useParams();
@@ -136,6 +139,20 @@ export default function ExamTestRoomPage() {
         if (payload?.attempt) {
           saveActiveAttempt(payload.attempt);
           setCompletedAttempt(payload.attempt);
+
+          // Synchronize Mistake Bank (local-first)
+          try {
+            const incorrectQs = questions.filter(
+              (q) => answers[q.id] && answers[q.id] !== (payload.attempt.questionResults?.[q.id]?.correctOptionId || q.correctOptionId)
+            );
+            const correctQs = questions.filter(
+              (q) => answers[q.id] === (payload.attempt.questionResults?.[q.id]?.correctOptionId || q.correctOptionId)
+            );
+            recordMistakeBatch(incorrectQs, correctQs);
+          } catch (mErr) {
+            console.warn("Could not sync mistake batch:", mErr);
+          }
+
           setIsSubmitted(true);
           setShowSubmitModal(false);
           setIsSubmitting(false);
@@ -200,6 +217,16 @@ export default function ExamTestRoomPage() {
     };
 
     saveActiveAttempt(attempt);
+
+    // Synchronize Mistake Bank (local-first)
+    try {
+      const incorrectQs = questions.filter((q) => answers[q.id] && answers[q.id] !== q.correctOptionId);
+      const correctQs = questions.filter((q) => answers[q.id] === q.correctOptionId);
+      recordMistakeBatch(incorrectQs, correctQs);
+    } catch (mErr) {
+      console.warn("Could not sync offline mistake batch:", mErr);
+    }
+
     setCompletedAttempt(attempt);
     setIsSubmitted(true);
     setShowSubmitModal(false);
@@ -401,20 +428,34 @@ export default function ExamTestRoomPage() {
               </h1>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Link
+                href={`/analytics/report/${examDef.id}`}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 px-3.5 py-2.5 text-xs font-semibold shadow-xs transition-colors"
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
+                <span>Diagnostic Report</span>
+              </Link>
+              <Link
+                href="/mistakes"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50/80 hover:bg-amber-100 text-amber-800 px-3.5 py-2.5 text-xs font-semibold shadow-xs transition-colors"
+              >
+                <Flame className="h-3.5 w-3.5 text-amber-600" />
+                <span>Mistake Bank</span>
+              </Link>
               <button
                 type="button"
                 onClick={handleRetakeExam}
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-xs font-semibold text-neutral-800 shadow-sm hover:bg-neutral-50 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3.5 py-2.5 text-xs font-semibold text-neutral-800 shadow-xs hover:bg-neutral-50 transition-colors"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                <span>Retake Exam</span>
+                <span>Retake</span>
               </button>
               <Link
                 href="/mock-exams"
-                className="inline-flex items-center gap-2 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white px-4 py-2.5 text-xs font-semibold shadow-sm transition-all"
+                className="inline-flex items-center gap-1.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white px-3.5 py-2.5 text-xs font-semibold shadow-xs transition-all"
               >
-                <span>Back to Exam Catalog</span>
+                <span>Exam Catalog</span>
                 <ArrowRight className="h-3.5 w-3.5 text-neutral-300" />
               </Link>
             </div>

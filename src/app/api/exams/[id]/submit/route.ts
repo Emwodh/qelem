@@ -134,6 +134,7 @@ export async function POST(
       const supabase = await createServerSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // A. Log exam attempt session
         await supabase.from("mock_exam_sessions").insert({
           user_id: user.id,
           exam_id: examDef.id,
@@ -143,6 +144,78 @@ export async function POST(
           completed_at: new Date().toISOString(),
           answers: answers,
         });
+
+        // B. Automated Mistake Ingestion & Spaced Repetition Graduation
+        const now = new Date().toISOString();
+        const incorrectList = questions.filter((q) => answers[q.id] && answers[q.id] !== q.correctOptionId);
+        const correctList = questions.filter((q) => answers[q.id] === q.correctOptionId);
+
+        // Upsert incorrect items into mistake_bank
+        for (const q of incorrectList) {
+          try {
+            const { data: existing } = await supabase
+              .from("mistake_bank")
+              .select("id, fail_count")
+              .eq("user_id", user.id)
+              .eq("question_id", q.id)
+              .maybeSingle();
+
+            if (existing) {
+              await supabase
+                .from("mistake_bank")
+                .update({
+                  fail_count: (existing.fail_count || 1) + 1,
+                  consecutive_correct: 0,
+                  is_graduated: false,
+                  last_attempted_at: now,
+                  updated_at: now,
+                })
+                .eq("id", existing.id);
+            } else {
+              await supabase.from("mistake_bank").insert({
+                user_id: user.id,
+                question_id: q.id,
+                subject: examDef.subject,
+                subject_id: examDef.subjectId,
+                grade: q.grade,
+                fail_count: 1,
+                consecutive_correct: 0,
+                is_graduated: false,
+                last_attempted_at: now,
+              });
+            }
+          } catch (mErr) {
+            console.warn("Could not upsert mistake item:", q.id, mErr);
+          }
+        }
+
+        // Advance Spaced Repetition graduation for questions answered correctly
+        for (const q of correctList) {
+          try {
+            const { data: existing } = await supabase
+              .from("mistake_bank")
+              .select("id, consecutive_correct, is_graduated")
+              .eq("user_id", user.id)
+              .eq("question_id", q.id)
+              .eq("is_graduated", false)
+              .maybeSingle();
+
+            if (existing) {
+              const newStreak = (existing.consecutive_correct || 0) + 1;
+              await supabase
+                .from("mistake_bank")
+                .update({
+                  consecutive_correct: newStreak,
+                  is_graduated: newStreak >= 2,
+                  last_attempted_at: now,
+                  updated_at: now,
+                })
+                .eq("id", existing.id);
+            }
+          } catch (cErr) {
+            console.warn("Could not update graduation progress:", q.id, cErr);
+          }
+        }
       }
     } catch (dbErr) {
       // Non-blocking: local client will store attempt in history regardless
