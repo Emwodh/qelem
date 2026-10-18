@@ -101,6 +101,29 @@
 
 ## Execution Log & Audit Trail
 
+### Milestone: Strict Separation of Student & Admin Dashboards & Page Assignment (October 18, 2026)
+- **Scope:** Complete architectural partition of the candidate learning application and the staff administrative command center.
+- **Portals Created & Partitioned:**
+  - **Student Portal:** Dedicated to candidate study goals (`/dashboard`, `/mistakes`, `/analytics`, `/analytics/report/[id]`, `/learn`, `/bank`, `/mock-exams`, `/mock-exams/[examId]`, `/practice`, `/study-plan`, `/settings`).
+  - **Admin Command Portal:** Dedicated to staff supervision (`/admin`, `/admin/payments`, `/admin/questions`, `/admin/analytics`).
+- **Files Created:**
+  - [`src/app/(dashboard)/admin/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/admin/page.tsx): Executive Admin Command Center featuring Gross Platform Revenue in ETB, pending CBE/Telebirr slip counters, question inventory, CBT attempts, live review queue preview, and passkey authentication.
+  - [`src/app/(dashboard)/admin/analytics/page.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/admin/analytics/page.tsx): Institutional platform telemetry analyzing nationwide student pass rates, revenue streams, and top failed curriculum units nationwide.
+- **Files Enhanced:**
+  - [`src/components/dashboard/Sidebar.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/components/dashboard/Sidebar.tsx): Implemented dual-mode navigation engine:
+    - In Admin mode (`/admin/*`): Renders administrative console links (*Admin Command*, *Payment Slips*, *Question Bank*, *Platform Telemetry*) with quick "Exit to Student App" action.
+    - In Student mode: Renders complete student curriculum links (*Dashboard*, *Mistake Bank*, *Analytics*, *Learning*, *Bank*, *Mock Exams*, *Test*, *Study Plans*, *Settings*).
+  - [`src/app/(dashboard)/layout.tsx`](file:///c:/Users/emwod/Downloads/Qelem/src/app/(dashboard)/layout.tsx): Context-aware sticky header displaying "Qelem Administration / Executive Console" in admin mode, and academic grade/stream details with exam countdown in student mode.
+  - [`overview.md`](file:///c:/Users/emwod/Downloads/Qelem/overview.md): Added Section 4 detailing the full Page Assignment Matrix across all 26 platform routes.
+- **Verification:**
+  - TypeScript type-check passed (`npm run lint` -> 0 errors).
+  - Production build passed (`npm run build` -> 26 routes bundled successfully).
+- **Rollback Instructions:**
+  To revert Student/Admin dashboard separation changes back to Phase 3 checkpoint:
+  ```bash
+  git reset --hard eddc94c
+  ```
+
 ### Milestone 3: Phase 3 Completed (October 18, 2026)
 - **Scope:** Automated Mistake Bank, Spaced Repetition (2-Consecutive-Correct Graduation) & Deep Post-Exam Analytics.
 - **Files Created:**

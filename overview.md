@@ -122,9 +122,43 @@ flowchart LR
 | `public.coupons` | Phase 2 | Promo and campus ambassador discount codes |
 | `public.device_sessions` | Phase 4 | Browser fingerprint hash and active session locks |
 
+## 4. Portal Architecture & Complete Page Assignment (Student vs. Admin)
+
+To provide an optimal user experience for Ethiopian candidates while maintaining professional, secure tools for administrators, the entire platform is partitioned into two distinct portals with contextual headers, isolated sidebars, and dedicated dashboards:
+
+### Portal Comparison Matrix
+
+| Feature / Domain | Student Portal (`/dashboard`, etc.) | Admin Command Portal (`/admin`, etc.) |
+| :--- | :--- | :--- |
+| **Primary Audience** | Grade 9–12 Ethiopian Candidates & Takers | Platform Operators, Teachers & SMEs |
+| **Theme & Aesthetic** | Learning-focused, Indigo/Emerald accents, countdown | High-contrast administrative dark console & amber alerts |
+| **Security Layer** | Candidate Session Auth (Supabase / Phone) | Passkey Gate (`x-admin-key` & HMAC validation) |
+| **Dashboard Focus** | Readiness score, daily streaks, weakness drills | Gross revenue (ETB), pending slips, question bank stats |
+| **Navigation Mode** | Personalized syllabus & test room navigation | Management console, slip verifier, question ingester |
+
+### Complete Route Assignment Table
+
+| Portal | Route | Exact Purpose & Features |
+| :--- | :--- | :--- |
+| **Student** | `/dashboard` | **Student Home & Readiness Dashboard**: Exam countdown timer, daily study streak, target university progress, subject curriculum cards, quick practice launch |
+| **Student** | `/mistakes` | **Automated Mistake Bank & Spaced Repetition**: Personal catalog of missed exam questions with 2-consecutive-correct graduation engine and instant KaTeX drill room |
+| **Student** | `/analytics` | **Student Performance Diagnostics & Cut-off Predictor**: Pacing velocity (seconds/question), speed vs accuracy quadrants, Grade 9–12 mastery matrix, AAU Medicine/Engineering cut-off projections |
+| **Student** | `/analytics/report/[id]` | **Post-Exam Session Diagnostic Report**: Granular chapter mastery, 1-click "Drill Weakness" CTAs, and step-by-step KaTeX derivations |
+| **Student** | `/learn` | **Curriculum Learning Hub**: Grade 9–12 textbook summaries, concise formula cheat sheets, and unit overview cards |
+| **Student** | `/bank` | **Curriculum Question Bank**: Self-study practice questions filtered by Grade, Subject, and Unit |
+| **Student** | `/mock-exams` | **Official CBT Exam Catalog**: Timed 50–65 question national entrance papers calibrated to FDRE Ministry of Education standards |
+| **Student** | `/mock-exams/[examId]` | **Authentic CBT Exam Room**: High-stakes timed simulator with Strikeout elimination tool, Tap-to-Zoom diagram lightbox, and server-side grading |
+| **Student** | `/practice` | **Diagnostic Sprint Test**: Speed-test and untimed practice modes |
+| **Student** | `/study-plan` | **Daily Study Scheduler**: Week-by-week topic milestones and revision planner |
+| **Student** | `/settings` | **Candidate Profile**: Academic stream (Natural/Social), grade level, target university, and account security |
+| **Admin** | `/admin` | **Admin Command Center**: Executive KPI metrics (Gross ETB revenue, pending manual slips, question inventory, student sessions), quick action hub, live verification queue |
+| **Admin** | `/admin/payments` | **Manual CBE & Telebirr Slip Verification Portal**: Passkey-protected queue to review student transaction references, receipt zoom lightbox, and 1-click Approve/Reject with instant Pro activation |
+| **Admin** | `/admin/questions` | **Master Question Bank Manager & AI Parser**: Question editor, LaTeX previewer, and AI/PDF bulk paper extraction tools |
+| **Admin** | `/admin/analytics` | **Platform Telemetry & Institutional Insights**: Nationwide student pass distributions, revenue breakdown, and top failed curriculum units |
+
 ---
 
-## 4. Emergency Rollback & Safety Procedures
+## 5. Emergency Rollback & Safety Procedures
 
 To ensure complete safety and give you the ability to revert anytime if unexpected behavior occurs:
 
