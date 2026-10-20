@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
+import NavigationProgress from "@/components/ui/NavigationProgress";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -53,6 +55,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} font-sans bg-[#FAFAFA] text-neutral-900 antialiased selection:bg-neutral-900 selection:text-white min-h-screen flex flex-col`}
       >
+        <Suspense fallback={null}>
+          <NavigationProgress />
+        </Suspense>
         {children}
       </body>
     </html>

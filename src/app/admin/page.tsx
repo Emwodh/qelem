@@ -27,6 +27,7 @@ import { getLocalPayments } from "@/lib/paymentStore";
 import { PaymentRecord } from "@/types/payment";
 import { getAllQuestions } from "@/lib/questionStore";
 import { getExamHistory } from "@/lib/mockExamData";
+import AdminLoading from "./loading";
 
 export default function AdminDashboardPage() {
   // Admin Security States
@@ -115,11 +116,7 @@ export default function AdminDashboardPage() {
 
   // Loading state
   if (isCheckingSavedKey) {
-    return (
-      <div className="flex h-96 items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-neutral-900 border-t-transparent" />
-      </div>
-    );
+    return <AdminLoading />;
   }
 
   // Passkey Lock Screen

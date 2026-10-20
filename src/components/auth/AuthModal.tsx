@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   X,
@@ -18,6 +19,7 @@ import {
   createClient as createBrowserSupabaseClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { AuthTransitionSkeleton } from "@/components/auth/AuthTransitionSkeleton";
 
 export interface AuthModalProps {
   isOpen: boolean;
@@ -40,6 +42,7 @@ export default function AuthModal({
   const [stream, setStream] = useState<ExamStream>("natural");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isPreparingWorkspace, setIsPreparingWorkspace] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -112,12 +115,14 @@ export default function AuthModal({
         loginCandidate(email.trim(), name || undefined);
       }
 
-      onClose();
-      router.push(redirectUrl);
-      router.refresh();
+      setIsPreparingWorkspace(true);
+      setTimeout(() => {
+        onClose();
+        router.push(redirectUrl);
+        router.refresh();
+      }, 700);
     } catch {
       setError("An unexpected authentication error occurred. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -141,8 +146,11 @@ export default function AuthModal({
       }
       // Demo fallback if OAuth keys are not initialized
       loginCandidate("google.candidate@qelem.edu.et", "Google Scholar");
-      onClose();
-      router.push(redirectUrl);
+      setIsPreparingWorkspace(true);
+      setTimeout(() => {
+        onClose();
+        router.push(redirectUrl);
+      }, 700);
     } else {
       window.open("https://t.me/qelem_edu", "_blank");
     }
@@ -176,9 +184,11 @@ export default function AuthModal({
         {/* 1. Left Half: Apple-grade Obsidian & Electric Indigo Brand Canvas */}
         <div className="hidden md:flex relative flex-col justify-between p-8 lg:p-9 overflow-hidden select-none bg-[#090D16]">
           {/* Full-bleed luminous backdrop */}
-          <img
+          <Image
             src="/images/auth-backdrop.jpg"
             alt="Qelem Atmosphere"
+            fill
+            sizes="(max-width: 768px) 100vw, 50vw"
             className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none opacity-90"
           />
           {/* Ambient gradient vignette */}
@@ -264,8 +274,15 @@ export default function AuthModal({
 
         {/* 2. Right Half: Interactive Tabbed Form Panel */}
         <div className="p-6 sm:p-8 lg:p-9 flex flex-col justify-between overflow-y-auto">
-          <div>
-            {/* Header Switcher: Sign up vs Log in */}
+          {isPreparingWorkspace ? (
+            <AuthTransitionSkeleton
+              candidateName={name.trim() || email.split("@")[0] || "Candidate"}
+              stream={stream}
+            />
+          ) : (
+            <>
+              <div>
+                {/* Header Switcher: Sign up vs Log in */}
             <div className="grid grid-cols-2 p-1 bg-neutral-100 rounded-2xl border border-neutral-200/70 mb-5">
               <button
                 type="button"
@@ -504,7 +521,9 @@ export default function AuthModal({
               By continuing, you agree to Qelem&apos;s Terms of Service and Privacy Policy.
             </p>
           </div>
-        </div>
+        </>
+      )}
+    </div>
       </div>
     </div>
   );

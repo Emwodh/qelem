@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Mail,
   Lock,
@@ -17,8 +19,10 @@ import {
   createClient as createBrowserSupabaseClient,
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
+import { AuthTransitionSkeleton } from "@/components/auth/AuthTransitionSkeleton";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [redirectUrl, setRedirectUrl] = useState("/dashboard");
   const [activeTab, setActiveTab] = useState<"signup" | "login">("signup");
   const [name, setName] = useState("");
@@ -27,6 +31,7 @@ export default function SignupPage() {
   const [stream, setStream] = useState<ExamStream>("natural");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isPreparingWorkspace, setIsPreparingWorkspace] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -106,10 +111,13 @@ export default function SignupPage() {
         loginCandidate(email.trim(), name || undefined);
       }
 
-      window.location.href = redirectUrl;
+      setIsPreparingWorkspace(true);
+      setTimeout(() => {
+        router.push(redirectUrl);
+        router.refresh();
+      }, 700);
     } catch {
       setError("An unexpected authentication error occurred. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -132,7 +140,10 @@ export default function SignupPage() {
         }
       }
       loginCandidate("google.candidate@qelem.edu.et", "Google Scholar");
-      window.location.href = redirectUrl;
+      setIsPreparingWorkspace(true);
+      setTimeout(() => {
+        router.push(redirectUrl);
+      }, 700);
     } else {
       window.open("https://t.me/qelem_edu", "_blank");
     }
@@ -147,9 +158,12 @@ export default function SignupPage() {
           {/* 1. Left Half: Apple-grade Obsidian & Electric Indigo Brand Canvas */}
           <div className="hidden md:flex relative flex-col justify-between p-8 lg:p-9 overflow-hidden select-none bg-[#090D16]">
             {/* Full-bleed luminous backdrop */}
-            <img
+            <Image
               src="/images/auth-backdrop.jpg"
               alt="Qelem Atmosphere"
+              fill
+              priority
+              sizes="(max-width: 768px) 100vw, 50vw"
               className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none opacity-90"
             />
             {/* Ambient gradient vignette */}
@@ -235,8 +249,15 @@ export default function SignupPage() {
 
           {/* 2. Right Half: Interactive Tabbed Form Panel */}
           <div className="p-6 sm:p-8 lg:p-9 flex flex-col justify-between overflow-y-auto">
-            <div>
-              <div className="grid grid-cols-2 p-1 bg-neutral-100 rounded-2xl border border-neutral-200/70 mb-5">
+            {isPreparingWorkspace ? (
+              <AuthTransitionSkeleton
+                candidateName={name.trim() || email.split("@")[0] || "Candidate"}
+                stream={stream}
+              />
+            ) : (
+              <>
+                <div>
+                  <div className="grid grid-cols-2 p-1 bg-neutral-100 rounded-2xl border border-neutral-200/70 mb-5">
                 <button
                   type="button"
                   onClick={() => {
@@ -461,7 +482,9 @@ export default function SignupPage() {
                 By continuing, you agree to Qelem&apos;s Terms of Service and Privacy Policy.
               </p>
             </div>
-          </div>
+          </>
+        )}
+      </div>
         </div>
       </div>
 

@@ -8,7 +8,18 @@ const withSerwist = withSerwistInit({
 });
 
 const nextConfig: NextConfig = {
-  // Add your Next.js config here
+  experimental: {
+    optimizePackageImports: ["lucide-react", "katex"],
+  },
+  images: {
+    formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**",
+      },
+    ],
+  },
 };
 
 export default withSerwist(nextConfig);
