@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { submitPaymentRecord, getLocalPayments } from "@/lib/paymentStore";
 import { ManualPaymentSubmission } from "@/types/payment";
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,6 +47,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 2. Production safety check
+    const isProduction = process.env.NODE_ENV === "production";
+    if (isProduction && !isSupabaseConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "Payment service unavailable: Database persistence is unconfigured in production. Cannot silently store payment record.",
+        },
+        { status: 503 }
+      );
+    }
+
     const submission: ManualPaymentSubmission = {
       candidateName: candidateName.trim(),
       phone: phone.trim(),
@@ -57,19 +70,22 @@ export async function POST(req: NextRequest) {
       receiptImageUrl: receiptImageUrl || undefined,
     };
 
-    // 2. Persist to payment store
+    // 3. Persist to payment store
     const payment = await submitPaymentRecord(submission);
 
-    // 3. Attempt to record on Supabase server if session active
-    try {
-      const supabase = await createServerSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from("payments").insert({
-          user_id: user.id,
+    // 4. Record on Supabase server
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = await createServerSupabaseClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        const { error: insertErr } = await supabase.from("payments").insert({
+          user_id: user?.id || null,
           candidate_name: submission.candidateName,
           phone: submission.phone,
-          email: submission.email || user.email || null,
+          email: submission.email || user?.email || null,
           tx_ref: payment.txRef,
           bank_tx_ref: submission.bankTxRef,
           amount_etb: submission.amountETB,
@@ -78,10 +94,19 @@ export async function POST(req: NextRequest) {
           status: "MANUAL_REVIEW",
           receipt_image_url: submission.receiptImageUrl || null,
         });
+
+        if (insertErr && isProduction) {
+          throw new Error("Supabase insert error: " + insertErr.message);
+        }
+      } catch (dbErr: any) {
+        if (isProduction) {
+          return NextResponse.json(
+            { error: "Database error persisting payment receipt", details: dbErr?.message },
+            { status: 500 }
+          );
+        }
+        console.warn("[Qelem Dev] Could not insert payment to Supabase directly in route:", dbErr);
       }
-    } catch (dbErr) {
-      // Non-fatal: local store persists submission
-      console.warn("Could not insert payment to Supabase directly in route:", dbErr);
     }
 
     return NextResponse.json(

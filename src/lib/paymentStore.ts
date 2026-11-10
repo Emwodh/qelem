@@ -3,7 +3,7 @@ import { createClient as createBrowserSupabaseClient, isSupabaseConfigured } fro
 
 const PAYMENTS_STORAGE_KEY = "qelem_manual_payments_store";
 
-// Sample pre-seeded payment submissions for admin demonstration
+// Sample pre-seeded payment submissions for development demonstration
 const INITIAL_DEMO_PAYMENTS: PaymentRecord[] = [
   {
     id: "pay_demo_001",
@@ -59,12 +59,15 @@ export function getLocalPayments(): PaymentRecord[] {
   try {
     const raw = localStorage.getItem(PAYMENTS_STORAGE_KEY);
     if (!raw) {
-      localStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify(INITIAL_DEMO_PAYMENTS));
-      return INITIAL_DEMO_PAYMENTS;
+      if (process.env.NODE_ENV !== "production") {
+        localStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify(INITIAL_DEMO_PAYMENTS));
+        return INITIAL_DEMO_PAYMENTS;
+      }
+      return [];
     }
     return JSON.parse(raw);
   } catch {
-    return INITIAL_DEMO_PAYMENTS;
+    return process.env.NODE_ENV !== "production" ? INITIAL_DEMO_PAYMENTS : [];
   }
 }
 
@@ -78,7 +81,9 @@ export function saveLocalPayments(records: PaymentRecord[]): void {
 }
 
 /**
- * Submits a new manual payment record (Telebirr or CBE)
+ * Submits a new manual payment record (Telebirr or CBE).
+ * In production: Enforces cloud database persistence; fails loudly if Supabase is offline.
+ * In development: Persists to localStorage with a clear warning.
  */
 export async function submitPaymentRecord(submission: ManualPaymentSubmission): Promise<PaymentRecord> {
   const txRef = `TX_MAN_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
@@ -98,18 +103,26 @@ export async function submitPaymentRecord(submission: ManualPaymentSubmission): 
     createdAt: new Date().toISOString(),
   };
 
-  // 1. Save to local storage for instant availability
-  const current = getLocalPayments();
-  const updated = [newRecord, ...current.filter((p) => p.bankTxRef !== submission.bankTxRef)];
-  saveLocalPayments(updated);
+  // Production check: Reject silent client-side storage for financial records
+  const isProduction = process.env.NODE_ENV === "production";
+  if (isProduction && !isSupabaseConfigured()) {
+    console.error(
+      "[SECURITY/DATA-INTEGRITY ERROR] Payment submission blocked: Supabase database is not configured in production. Cannot store financial transaction in client localStorage."
+    );
+    throw new Error(
+      "Payment gateway unavailable: Cloud database persistence is not configured in production."
+    );
+  }
 
-  // 2. Sync to Supabase if configured
+  // Sync to Supabase if configured
   if (isSupabaseConfigured()) {
     try {
       const supabase = createBrowserSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
-      await supabase.from("payments").insert({
+      const { error: insertError } = await supabase.from("payments").insert({
         user_id: user?.id || null,
         candidate_name: submission.candidateName,
         phone: submission.phone,
@@ -122,10 +135,27 @@ export async function submitPaymentRecord(submission: ManualPaymentSubmission): 
         status: "MANUAL_REVIEW",
         receipt_image_url: submission.receiptImageUrl || null,
       });
-    } catch (err) {
-      console.warn("Could not sync payment record to Supabase, stored locally:", err);
+
+      if (insertError) {
+        if (isProduction) {
+          console.error("[CRITICAL] Production payment insertion failed in Supabase:", insertError);
+          throw new Error("Failed to persist payment record to database: " + insertError.message);
+        } else {
+          console.warn("[Qelem Dev] Supabase insert failed; falling back to localStorage:", insertError);
+        }
+      }
+    } catch (err: any) {
+      if (isProduction) {
+        throw new Error("Cloud database unreachable for payment submission: " + err?.message);
+      }
+      console.warn("[Qelem Dev] Could not sync payment to Supabase; storing locally:", err);
     }
   }
+
+  // In development, save to localStorage for seamless local testing
+  const current = getLocalPayments();
+  const updated = [newRecord, ...current.filter((p) => p.bankTxRef !== submission.bankTxRef)];
+  saveLocalPayments(updated);
 
   return newRecord;
 }
@@ -154,7 +184,7 @@ export async function updatePaymentStatus(
   if (isSupabaseConfigured()) {
     try {
       const supabase = createBrowserSupabaseClient();
-      await supabase
+      const { error } = await supabase
         .from("payments")
         .update({
           status: newStatus,
@@ -162,6 +192,10 @@ export async function updatePaymentStatus(
           admin_notes: adminNotes || target.adminNotes,
         })
         .or(`id.eq.${paymentId},tx_ref.eq.${paymentId}`);
+
+      if (error && process.env.NODE_ENV === "production") {
+        console.error("[CRITICAL] Failed to sync payment review status to Supabase in production:", error);
+      }
     } catch (err) {
       console.warn("Could not sync status update to Supabase:", err);
     }
