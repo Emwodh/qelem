@@ -1,0 +1,45 @@
+name: Qelem CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Type-Check, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js runtime (v22)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies with package-lock.json
+        run: npm ci
+
+      - name: Run strict TypeScript type checks
+        run: npm run type-check
+
+      - name: Run Auth0 and routing verification suite
+        run: npm test
+
+      - name: Compile Next.js production build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          AUTH0_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          APP_BASE_URL: http://localhost:3000
+          AUTH0_DOMAIN: ci-test.auth0.com
+          AUTH0_CLIENT_ID: ci_test_client_id
+          AUTH0_CLIENT_SECRET: ci_test_client_secret
+          ADMIN_SECRET_KEY: ci_test_admin_secret_key_1234567890
+          ADMIN_SEED_SECRET: ci_test_admin_secret_key_1234567890
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci_placeholder_anon_key
