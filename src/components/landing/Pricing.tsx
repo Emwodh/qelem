@@ -3,15 +3,10 @@
 import React, { useState } from "react";
 import { Check, Sparkles, ArrowRight, ShieldCheck, Zap, Rocket } from "lucide-react";
 import { PRICING_PLANS } from "@/lib/landing-data";
-import AuthModal from "@/components/auth/AuthModal";
 
 export const Pricing: React.FC = () => {
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authTab, setAuthTab] = useState<"signup" | "login">("signup");
-
-  const handleCta = (planId: string) => {
-    setAuthTab("signup");
-    setAuthModalOpen(true);
+  const handleCta = (_planId: string) => {
+    window.location.href = "/auth/login?screen_hint=signup&returnTo=/dashboard";
   };
 
   return (
@@ -204,13 +199,6 @@ export const Pricing: React.FC = () => {
           </div>
         </div>
       </div>
-
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialTab={authTab}
-        redirectUrl="/dashboard"
-      />
     </section>
   );
 };

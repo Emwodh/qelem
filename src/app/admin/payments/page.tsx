@@ -13,51 +13,58 @@ import {
   Eye,
   Check,
   X,
-  Lock,
-  KeyRound,
-  RotateCcw,
-  Sparkles,
   Smartphone,
   Award,
   AlertCircle,
   Copy,
   ExternalLink,
-  ChevronRight,
   Loader2,
+  Download,
+  Plus,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  Trash2,
+  FileText,
+  DollarSign,
 } from "lucide-react";
-import { PaymentRecord, PaymentStatus } from "@/types/payment";
-import { getLocalPayments } from "@/lib/paymentStore";
+import { PaymentRecord, PaymentStatus, ManualPaymentSubmission } from "@/types/payment";
+import { getLocalPayments, updatePaymentStatus, submitPaymentRecord } from "@/lib/paymentStore";
+import { updateCandidateProAccess } from "@/lib/userStore";
+import { logAdminAction } from "@/lib/auditStore";
 
 export default function AdminPaymentsPage() {
-  // Admin Security States
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [adminKeyInput, setAdminKeyInput] = useState("");
-  const [adminKeyError, setAdminKeyError] = useState("");
-  const [isValidatingKey, setIsValidatingKey] = useState(false);
-  const [isCheckingSavedKey, setIsCheckingSavedKey] = useState(true);
-
-  // Data & Filter States
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"all" | PaymentStatus>("MANUAL_REVIEW");
+  const [methodFilter, setMethodFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeReceiptImage, setActiveReceiptImage] = useState<string | null>(null);
+
+  // Inspection Lightbox & Zoom
+  const [inspectingPayment, setInspectingPayment] = useState<PaymentRecord | null>(null);
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [rotationDegrees, setRotationDegrees] = useState<number>(0);
+
+  // Rejection Reason Modal
+  const [rejectingPayment, setRejectingPayment] = useState<PaymentRecord | null>(null);
+  const [rejectReason, setRejectReason] = useState<string>("Duplicate transaction reference ID.");
+
+  // Record Manual Payment Modal
+  const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualPhone, setManualPhone] = useState("+2519");
+  const [manualMethod, setManualMethod] = useState<"cbe" | "telebirr">("cbe");
+  const [manualBankRef, setManualBankRef] = useState("");
+  const [manualAmount, setManualAmount] = useState<number>(349);
+  const [manualNote, setManualNote] = useState("Offline in-person payment verified.");
+
+  // Bulk Selection
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [copiedRef, setCopiedRef] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // 1. Check existing admin session
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem("qelem_admin_key");
-      if (saved) {
-        setIsAdminUnlocked(true);
-      }
-    }
-    setIsCheckingSavedKey(false);
-  }, []);
-
-  // 2. Fetch payments
+  // Fetch payments
   const fetchPayments = async () => {
     setIsLoading(true);
     const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("qelem_admin_key") : null;
@@ -67,61 +74,34 @@ export default function AdminPaymentsPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data?.payments) {
+        if (data?.payments && Array.isArray(data.payments) && data.payments.length > 0) {
           setPayments(data.payments);
           setIsLoading(false);
           return;
         }
       }
-    } catch (err) {
-      console.warn("Could not fetch remote payments, reading local storage:", err);
+    } catch {
+      // Local fallback
     }
-    // Fallback to local store
     setPayments(getLocalPayments());
     setIsLoading(false);
   };
 
   useEffect(() => {
-    if (isAdminUnlocked) {
-      fetchPayments();
-    }
-  }, [isAdminUnlocked]);
+    fetchPayments();
+  }, []);
 
-  // 3. Unlock Admin Form
-  const handleUnlockAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminKeyInput.trim()) {
-      setAdminKeyError("Please enter the administrator security passkey.");
-      return;
-    }
-    setIsValidatingKey(true);
-    setAdminKeyError("");
-    try {
-      const res = await fetch("/api/admin/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: adminKeyInput.trim() }),
-      });
-      const data = await res.json();
-      if (res.ok && data.valid) {
-        sessionStorage.setItem("qelem_admin_key", adminKeyInput.trim());
-        setIsAdminUnlocked(true);
-        setAdminKeyInput("");
-      } else {
-        setAdminKeyError(data.error || "Incorrect admin passkey. Access denied.");
-      }
-    } catch {
-      setAdminKeyError("Connection error while validating credentials.");
-    } finally {
-      setIsValidatingKey(false);
-    }
+  const showFeedback = (text: string, type: "success" | "error" = "success") => {
+    setActionMessage({ type, text });
+    setTimeout(() => setActionMessage(null), 3500);
   };
 
-  // 4. Review Payment (Approve or Reject)
-  const handleReview = async (paymentId: string, action: "approve" | "reject") => {
+  // 1. Single Approve / Reject
+  const handleReview = async (paymentId: string, action: "approve" | "reject", notes?: string) => {
     setProcessingId(paymentId);
-    setActionMessage(null);
     const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("qelem_admin_key") : "";
+
+    const targetPayment = payments.find((p) => p.id === paymentId || p.txRef === paymentId);
 
     try {
       const res = await fetch("/api/admin/payments/review", {
@@ -133,32 +113,141 @@ export default function AdminPaymentsPage() {
         body: JSON.stringify({
           paymentId,
           action,
-          adminNotes: action === "approve" ? "Verified via CBE / Telebirr confirmation." : "Receipt reference invalid.",
+          adminNotes: notes || (action === "approve" ? "Verified via CBE / Telebirr statement." : "Transaction unverified."),
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        // Update local state immediately
-        setPayments((prev) =>
-          prev.map((p) =>
-            p.id === paymentId || p.txRef === paymentId
-              ? { ...p, status: action === "approve" ? "COMPLETED" : "REJECTED", reviewedAt: new Date().toISOString() }
-              : p
-          )
-        );
-        setActionMessage({
-          type: "success",
-          text: action === "approve" ? "Payment approved! Candidate granted Pro access." : "Payment marked as rejected.",
-        });
-      } else {
-        setActionMessage({ type: "error", text: data.error || "Failed to update payment status." });
+      if (res.ok) {
+        // Success via server API
       }
     } catch {
-      setActionMessage({ type: "error", text: "Network error processing payment review." });
-    } finally {
-      setProcessingId(null);
+      // Offline fallback
     }
+
+    // Always update local store
+    await updatePaymentStatus(paymentId, action === "approve" ? "COMPLETED" : "REJECTED", notes);
+
+    // If approved, update candidate record
+    if (action === "approve" && targetPayment) {
+      updateCandidateProAccess(targetPayment.phone, true, "MATRIC_SEASON_PASS");
+      logAdminAction(
+        "APPROVE_PAYMENT",
+        `Approved ${targetPayment.amountETB} ETB (${targetPayment.method.toUpperCase()}) for ${targetPayment.candidateName}. Activated Pro access.`,
+        targetPayment.id
+      );
+    } else if (targetPayment) {
+      logAdminAction(
+        "REJECT_PAYMENT",
+        `Rejected slip for ${targetPayment.candidateName}: ${notes || "Invalid reference"}`,
+        targetPayment.id
+      );
+    }
+
+    fetchPayments();
+    setProcessingId(null);
+    if (inspectingPayment?.id === paymentId) {
+      setInspectingPayment(null);
+    }
+    showFeedback(
+      action === "approve"
+        ? "Payment approved! Candidate Pro access has been activated."
+        : "Slip marked as rejected."
+    );
+  };
+
+  // 2. Bulk Approve
+  const handleBulkApprove = async () => {
+    if (selectedIds.length === 0) return;
+    for (const id of selectedIds) {
+      await updatePaymentStatus(id, "COMPLETED", "Bulk approved by administrator");
+      const target = payments.find((p) => p.id === id);
+      if (target) {
+        updateCandidateProAccess(target.phone, true, "MATRIC_SEASON_PASS");
+      }
+    }
+    logAdminAction("APPROVE_PAYMENT", `Bulk approved ${selectedIds.length} candidate payment slips.`);
+    setSelectedIds([]);
+    fetchPayments();
+    showFeedback(`Bulk approved ${selectedIds.length} candidate slips.`);
+  };
+
+  // 3. Record Manual Offline Payment
+  const handleCreateManualPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualName.trim() || !manualBankRef.trim()) return;
+
+    const submission: ManualPaymentSubmission = {
+      candidateName: manualName.trim(),
+      phone: manualPhone.trim(),
+      method: manualMethod,
+      bankTxRef: manualBankRef.trim().toUpperCase(),
+      amountETB: Number(manualAmount) || 349,
+      plan: "MATRIC_SEASON_PASS",
+      receiptImageUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=600&auto=format&fit=crop&q=80",
+    };
+
+    const newRecord = await submitPaymentRecord(submission);
+    await updatePaymentStatus(newRecord.id, "COMPLETED", manualNote);
+    updateCandidateProAccess(manualPhone.trim(), true, "MATRIC_SEASON_PASS");
+
+    logAdminAction(
+      "RECORD_MANUAL_PAYMENT",
+      `Recorded manual cash/bank payment of ${manualAmount} ETB for ${manualName} (${manualBankRef})`,
+      newRecord.id
+    );
+
+    setIsRecordModalOpen(false);
+    setManualName("");
+    setManualBankRef("");
+    fetchPayments();
+    showFeedback(`Recorded & approved payment for ${manualName}!`);
+  };
+
+  // 4. Export CSV
+  const handleExportCSV = () => {
+    const headers = [
+      "ID",
+      "Candidate Name",
+      "Phone",
+      "Email",
+      "Method",
+      "Amount (ETB)",
+      "Plan",
+      "Bank Tx Ref",
+      "Internal Tx Ref",
+      "Status",
+      "Created At",
+      "Reviewed At",
+      "Admin Notes",
+    ];
+
+    const rows = payments.map((p) => [
+      p.id,
+      `"${p.candidateName}"`,
+      `"${p.phone}"`,
+      `"${p.email || ""}"`,
+      p.method.toUpperCase(),
+      p.amountETB,
+      p.plan,
+      `"${p.bankTxRef || ""}"`,
+      p.txRef,
+      p.status,
+      p.createdAt,
+      p.reviewedAt || "",
+      `"${p.adminNotes || ""}"`,
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.href = encodedUri;
+    link.download = `qelem_payment_reconciliation_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const copyToClipboard = (text: string) => {
@@ -168,6 +257,25 @@ export default function AdminPaymentsPage() {
       setTimeout(() => setCopiedRef(null), 2000);
     }
   };
+
+  // Filtered Payments
+  const filteredPayments = useMemo(() => {
+    return payments.filter((p) => {
+      if (statusFilter !== "all" && p.status !== statusFilter) return false;
+      if (methodFilter !== "all" && p.method !== methodFilter) return false;
+
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const inName = p.candidateName.toLowerCase().includes(query);
+        const inPhone = p.phone.toLowerCase().includes(query);
+        const inTx = p.txRef.toLowerCase().includes(query);
+        const inBankTx = (p.bankTxRef || "").toLowerCase().includes(query);
+        if (!inName && !inPhone && !inTx && !inBankTx) return false;
+      }
+
+      return true;
+    });
+  }, [payments, statusFilter, methodFilter, searchQuery]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -180,451 +288,676 @@ export default function AdminPaymentsPage() {
     return { total, pending, completed, totalETB };
   }, [payments]);
 
-  // Filtered Payments
-  const filteredPayments = useMemo(() => {
-    return payments.filter((p) => {
-      if (statusFilter !== "all" && p.status !== statusFilter) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = p.candidateName.toLowerCase().includes(q);
-        const matchesPhone = p.phone.toLowerCase().includes(q);
-        const matchesRef = p.bankTxRef.toLowerCase().includes(q) || p.txRef.toLowerCase().includes(q);
-        return matchesName || matchesPhone || matchesRef;
-      }
-      return true;
-    });
-  }, [payments, statusFilter, searchQuery]);
-
-  // If checking passkey, show clean loader
-  if (isCheckingSavedKey) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
-      </div>
-    );
-  }
-
-  // Security Gate UI
-  if (!isAdminUnlocked) {
-    return (
-      <div className="mx-auto max-w-md py-16 px-4">
-        <div className="rounded-3xl border border-neutral-200/90 bg-white p-6 sm:p-8 shadow-sm space-y-6">
-          <div className="text-center space-y-2">
-            <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 text-neutral-900 border border-neutral-200">
-              <Lock className="h-6 w-6" />
-            </div>
-            <h2 className="text-xl font-bold text-neutral-950">Payment Verification Guard</h2>
-            <p className="text-xs text-neutral-500">
-              Enter administrator passkey to inspect and approve student bank transfers.
-            </p>
-          </div>
-
-          <form onSubmit={handleUnlockAdmin} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-neutral-700">Administrator Passkey</label>
-              <div className="relative">
-                <KeyRound className="absolute left-3.5 top-3 h-4 w-4 text-neutral-400" />
-                <input
-                  type="password"
-                  value={adminKeyInput}
-                  onChange={(e) => setAdminKeyInput(e.target.value)}
-                  placeholder="Enter ADMIN_SECRET_KEY..."
-                  className="w-full rounded-xl border border-neutral-200 bg-neutral-50/60 py-2.5 pl-10 pr-4 text-sm focus:border-neutral-950 focus:bg-white focus:outline-hidden"
-                  autoFocus
-                />
-              </div>
-              {adminKeyError && (
-                <div className="flex items-center gap-1.5 text-xs text-rose-600 mt-1 font-medium">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                  <span>{adminKeyError}</span>
-                </div>
-              )}
-            </div>
-
-            <button
-              type="submit"
-              disabled={isValidatingKey}
-              className="w-full h-11 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isValidatingKey ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              <span>Unlock Payment Queue</span>
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
+  const toggleSelectAllPending = () => {
+    const pendingIds = filteredPayments
+      .filter((p) => p.status === "MANUAL_REVIEW")
+      .map((p) => p.id);
+    if (selectedIds.length === pendingIds.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(pendingIds);
+    }
+  };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-10 space-y-8 animate-in fade-in-50 duration-300">
+    <div className="mx-auto max-w-7xl space-y-6 pb-20">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span>Payment Verification Portal</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 text-xs font-mono font-medium text-indigo-300">
+              <CreditCard className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Financial Verification Gateway</span>
             </span>
-            <span className="text-xs text-neutral-400">&bull;</span>
-            <span className="text-xs font-semibold text-neutral-600">Telebirr & CBE Birr</span>
+            <span className="text-xs text-neutral-500 font-mono">«የክፍያ ማረጋገጫ»</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-950 mt-1.5">
-            Student Payment Slips & Verification
+          <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+            Manual CBE & Telebirr Slip Verification
           </h1>
-          <p className="text-xs sm:text-sm text-neutral-500 mt-0.5">
-            Review manual transfer references, inspect bank receipt screenshots, and activate Pro subscriptions.
+          <p className="text-xs sm:text-sm text-neutral-400 mt-1">
+            Review uploaded mobile banking receipts, match transaction IDs with bank SMS feeds, and approve student Pro Season passes in 1-click.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link
-            href="/admin/questions"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 px-3.5 py-2 text-xs font-semibold text-neutral-700 shadow-2xs transition-colors"
-          >
-            <span>Question CMS</span>
-            <ChevronRight className="h-3.5 w-3.5 text-neutral-400" />
-          </Link>
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
-            onClick={fetchPayments}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white hover:bg-neutral-50 px-3.5 py-2 text-xs font-semibold text-neutral-700 shadow-2xs transition-colors cursor-pointer"
-            title="Refresh payment slips"
+            onClick={handleExportCSV}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.08] text-neutral-200 px-3.5 py-2 text-xs font-semibold transition-all cursor-pointer"
           >
-            <RotateCcw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin text-blue-600" : ""}`} />
-            <span>Refresh</span>
+            <Download className="h-4 w-4 text-neutral-400" />
+            <span>Export Financial Ledger</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsRecordModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 text-xs font-semibold shadow-[0_0_20px_rgba(79,70,229,0.35)] transition-all cursor-pointer"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Record Manual Payment</span>
           </button>
         </div>
       </div>
 
-      {/* Action Notification */}
       {actionMessage && (
         <div
-          className={`rounded-2xl p-4 text-xs font-semibold flex items-center justify-between gap-3 border animate-in slide-in-from-top-2 duration-200 ${
+          className={`rounded-2xl p-4 text-xs font-medium flex items-center justify-between animate-in fade-in ${
             actionMessage.type === "success"
-              ? "bg-emerald-50 text-emerald-900 border-emerald-200"
-              : "bg-rose-50 text-rose-900 border-rose-200"
+              ? "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300"
+              : "bg-rose-500/10 border border-rose-500/20 text-rose-300"
           }`}
         >
           <div className="flex items-center gap-2">
             {actionMessage.type === "success" ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
             ) : (
-              <AlertCircle className="h-4 w-4 text-rose-600" />
+              <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />
             )}
             <span>{actionMessage.text}</span>
           </div>
-          <button type="button" onClick={() => setActionMessage(null)} className="text-neutral-500 hover:text-neutral-900">
-            <X className="h-4 w-4" />
-          </button>
         </div>
       )}
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Pending Review */}
-        <div className="rounded-2xl border border-amber-200/80 bg-amber-50/50 p-5 space-y-1">
-          <div className="flex items-center justify-between text-xs font-semibold text-amber-800">
-            <span>Pending Review</span>
-            <Clock className="h-4 w-4 text-amber-600" />
+      {/* KPI Stats Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="rounded-2xl border border-white/[0.08] bg-[#11131B] p-4 space-y-1">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-400">Verified Revenue</span>
+          <div className="text-2xl font-black text-white">
+            {metrics.totalETB.toLocaleString()}{" "}
+            <span className="text-xs font-mono font-medium text-neutral-400">ETB</span>
           </div>
-          <div className="text-3xl font-extrabold text-amber-950 font-mono">{metrics.pending}</div>
-          <span className="text-[11px] text-amber-700 font-medium">Slips requiring verification</span>
+          <span className="text-[11px] text-neutral-400">{metrics.completed} successful transactions</span>
         </div>
 
-        {/* Completed / Active */}
-        <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-5 space-y-1">
-          <div className="flex items-center justify-between text-xs font-semibold text-emerald-800">
-            <span>Verified & Active</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+        <div className="rounded-2xl border border-white/[0.08] bg-[#11131B] p-4 space-y-1">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-400">Review Queue</span>
+          <div className="flex items-center gap-2">
+            <div className="text-2xl font-black text-amber-400">{metrics.pending}</div>
+            {metrics.pending > 0 && (
+              <span className="text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full animate-pulse">
+                Action Required
+              </span>
+            )}
           </div>
-          <div className="text-3xl font-extrabold text-emerald-950 font-mono">{metrics.completed}</div>
-          <span className="text-[11px] text-emerald-700 font-medium">Activated Pro passes</span>
+          <span className="text-[11px] text-neutral-400">Awaiting admin review</span>
         </div>
 
-        {/* Total Collected */}
-        <div className="rounded-2xl border border-neutral-200/90 bg-white p-5 space-y-1">
-          <div className="flex items-center justify-between text-xs font-semibold text-neutral-600">
-            <span>Verified Revenue</span>
-            <CreditCard className="h-4 w-4 text-neutral-500" />
-          </div>
-          <div className="text-3xl font-extrabold text-neutral-950 font-mono">{metrics.totalETB.toLocaleString()} ETB</div>
-          <span className="text-[11px] text-neutral-400">Total collected via CBE/Telebirr</span>
+        <div className="rounded-2xl border border-white/[0.08] bg-[#11131B] p-4 space-y-1">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-400">Total Submissions</span>
+          <div className="text-2xl font-black text-indigo-400">{metrics.total}</div>
+          <span className="text-[11px] text-neutral-400">CBE + Telebirr tickets</span>
         </div>
 
-        {/* Total Submissions */}
-        <div className="rounded-2xl border border-neutral-200/90 bg-white p-5 space-y-1">
-          <div className="flex items-center justify-between text-xs font-semibold text-neutral-600">
-            <span>Total Submissions</span>
-            <Sparkles className="h-4 w-4 text-neutral-500" />
+        <div className="rounded-2xl border border-white/[0.08] bg-[#11131B] p-4 space-y-1">
+          <span className="text-[11px] font-mono uppercase tracking-wider text-neutral-400">Conversion Rate</span>
+          <div className="text-2xl font-black text-emerald-400">
+            {metrics.total > 0 ? Math.round((metrics.completed / metrics.total) * 100) : 100}%
           </div>
-          <div className="text-3xl font-extrabold text-neutral-950 font-mono">{metrics.total}</div>
-          <span className="text-[11px] text-neutral-400">All submitted payment slips</span>
+          <span className="text-[11px] text-neutral-400">Approval percentage</span>
         </div>
       </div>
 
-      {/* Controls & Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Filter Pills */}
-        <div className="inline-flex rounded-xl bg-neutral-100 p-1 border border-neutral-200/70 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => setStatusFilter("MANUAL_REVIEW")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-              statusFilter === "MANUAL_REVIEW" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600 hover:text-neutral-950"
-            }`}
-          >
-            Pending Review ({metrics.pending})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("all")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-              statusFilter === "all" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600 hover:text-neutral-950"
-            }`}
-          >
-            All Slips ({metrics.total})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("COMPLETED")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-              statusFilter === "COMPLETED" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600 hover:text-neutral-950"
-            }`}
-          >
-            Approved ({metrics.completed})
-          </button>
-          <button
-            type="button"
-            onClick={() => setStatusFilter("REJECTED")}
-            className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-              statusFilter === "REJECTED" ? "bg-white text-neutral-950 shadow-sm" : "text-neutral-600 hover:text-neutral-950"
-            }`}
-          >
-            Rejected
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-neutral-400" />
+      {/* Toolbar & Filter Bar */}
+      <div className="rounded-2xl border border-white/[0.08] bg-[#11131B] p-4 flex flex-col md:flex-row items-center gap-3 justify-between">
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by student name, phone, or ref..."
-            className="w-full rounded-xl border border-neutral-200 bg-white py-2 pl-9 pr-4 text-xs focus:border-neutral-950 focus:outline-hidden"
+            placeholder="Search candidate name, phone (+251), bank ref (FT... / TLB...)..."
+            className="w-full rounded-xl border border-white/[0.08] bg-[#181A24] pl-10 pr-4 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-indigo-500 outline-none"
           />
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="rounded-xl border border-white/[0.08] bg-[#181A24] px-3 py-2 text-xs text-neutral-300 focus:border-indigo-500 outline-none"
+          >
+            <option value="all">All Statuses</option>
+            <option value="MANUAL_REVIEW">Review Queue (Pending)</option>
+            <option value="COMPLETED">Approved & Active</option>
+            <option value="REJECTED">Rejected Slips</option>
+          </select>
+
+          <select
+            value={methodFilter}
+            onChange={(e) => setMethodFilter(e.target.value)}
+            className="rounded-xl border border-white/[0.08] bg-[#181A24] px-3 py-2 text-xs text-neutral-300 focus:border-indigo-500 outline-none"
+          >
+            <option value="all">All Gateways</option>
+            <option value="cbe">CBE Mobile / Branch</option>
+            <option value="telebirr">Telebirr P2P / Merchant</option>
+          </select>
+
+          {selectedIds.length > 0 && (
+            <button
+              type="button"
+              onClick={handleBulkApprove}
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5"
+            >
+              <Check className="h-4 w-4" />
+              <span>Approve Selected ({selectedIds.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Slips List */}
-      <div className="space-y-3">
-        {filteredPayments.length === 0 ? (
-          <div className="rounded-3xl border border-neutral-200/80 bg-white p-12 text-center space-y-2">
-            <CheckCircle2 className="mx-auto h-8 w-8 text-neutral-300" />
-            <h3 className="text-sm font-bold text-neutral-800">No payment slips match this filter</h3>
-            <p className="text-xs text-neutral-500">
-              {statusFilter === "MANUAL_REVIEW"
-                ? "All student payments have been reviewed and verified!"
-                : "No matching payment records found."}
-            </p>
-          </div>
-        ) : (
-          filteredPayments.map((p) => {
-            const isPending = p.status === "MANUAL_REVIEW";
-            const isApproved = p.status === "COMPLETED";
-            const isRejected = p.status === "REJECTED";
-            const isWorking = processingId === p.id || processingId === p.txRef;
-
-            return (
-              <div
-                key={p.id}
-                className="rounded-2xl border border-neutral-200/90 bg-white p-5 sm:p-6 shadow-2xs hover:shadow-xs transition-all space-y-4"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-100">
-                  <div className="flex items-center gap-3">
-                    {/* Method Icon */}
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold text-xs ${
-                        p.method === "telebirr"
-                          ? "bg-blue-50 text-blue-700 border border-blue-200"
-                          : "bg-purple-50 text-purple-700 border border-purple-200"
+      {/* Slips Table */}
+      <div className="rounded-2xl border border-white/[0.08] bg-[#11131B] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/[0.08] bg-white/[0.02] text-[11px] font-mono uppercase text-neutral-400">
+                <th className="py-3 px-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={
+                      selectedIds.length > 0 &&
+                      selectedIds.length ===
+                        filteredPayments.filter((p) => p.status === "MANUAL_REVIEW").length
+                    }
+                    onChange={toggleSelectAllPending}
+                    className="rounded border-white/[0.1] bg-[#181A24] text-indigo-600 focus:ring-0 cursor-pointer"
+                  />
+                </th>
+                <th className="py-3 px-4">Candidate & Phone</th>
+                <th className="py-3 px-4">Method & Amount</th>
+                <th className="py-3 px-4">Bank Reference</th>
+                <th className="py-3 px-4">Submitted</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.06] text-xs">
+              {filteredPayments.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-12 text-center text-neutral-400">
+                    No payment slips found matching your filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredPayments.map((p) => {
+                  const isSelected = selectedIds.includes(p.id);
+                  return (
+                    <tr
+                      key={p.id}
+                      className={`hover:bg-white/[0.02] transition-colors ${
+                        isSelected ? "bg-indigo-600/10" : ""
                       }`}
                     >
-                      {p.method === "telebirr" ? <Smartphone className="h-5 w-5" /> : <Award className="h-5 w-5" />}
-                    </div>
+                      {/* Checkbox */}
+                      <td className="py-3.5 px-4">
+                        {p.status === "MANUAL_REVIEW" && (
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedIds([...selectedIds, p.id]);
+                              } else {
+                                setSelectedIds(selectedIds.filter((id) => id !== p.id));
+                              }
+                            }}
+                            className="rounded border-white/[0.1] bg-[#181A24] text-indigo-600 focus:ring-0 cursor-pointer"
+                          />
+                        )}
+                      </td>
 
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-sm font-bold text-neutral-950">{p.candidateName}</h3>
-                        <span className="text-xs text-neutral-400">&bull;</span>
-                        <span className="text-xs font-mono font-medium text-neutral-600">{p.phone}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-neutral-500 mt-0.5">
-                        <span className="capitalize font-semibold text-neutral-700">{p.method} Transfer</span>
-                        <span>&bull;</span>
-                        <span>{new Date(p.createdAt).toLocaleDateString()} at {new Date(p.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                    </div>
-                  </div>
+                      {/* Candidate & Phone */}
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-white text-sm">{p.candidateName}</div>
+                        <div className="text-[11px] text-neutral-400 font-mono">
+                          {p.phone} {p.email ? `• ${p.email}` : ""}
+                        </div>
+                      </td>
 
-                  {/* Status Badge */}
-                  <div className="flex items-center gap-2">
-                    {isPending && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 border border-amber-200">
-                        <Clock className="h-3.5 w-3.5 text-amber-600" />
-                        <span>Needs Verification</span>
-                      </span>
-                    )}
-                    {isApproved && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800 border border-emerald-200">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                        <span>Approved & Active</span>
-                      </span>
-                    )}
-                    {isRejected && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-800 border border-rose-200">
-                        <XCircle className="h-3.5 w-3.5 text-rose-600" />
-                        <span>Rejected</span>
-                      </span>
-                    )}
-                  </div>
+                      {/* Method & Amount */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full border ${
+                              p.method === "cbe"
+                                ? "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                                : "bg-blue-500/15 border-blue-500/30 text-blue-300"
+                            }`}
+                          >
+                            {p.method}
+                          </span>
+                          <span className="font-mono font-bold text-white">
+                            {p.amountETB} ETB
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-neutral-400 mt-0.5">{p.plan}</div>
+                      </td>
+
+                      {/* Bank Reference */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5 font-mono text-xs text-neutral-200">
+                          <span className="font-semibold">{p.bankTxRef || p.txRef}</span>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(p.bankTxRef || p.txRef)}
+                            className="p-1 rounded text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-all cursor-pointer"
+                            title="Copy Transaction Reference"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </button>
+                          {copiedRef === (p.bankTxRef || p.txRef) && (
+                            <span className="text-[10px] text-emerald-400">Copied!</span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-neutral-500 font-mono">{p.txRef}</div>
+                      </td>
+
+                      {/* Submitted Time */}
+                      <td className="py-3.5 px-4 text-neutral-400 font-mono text-[11px]">
+                        {new Date(p.createdAt).toLocaleDateString()}{" "}
+                        <span className="text-neutral-500">
+                          {new Date(p.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-3.5 px-4">
+                        {p.status === "MANUAL_REVIEW" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300">
+                            <Clock className="h-3 w-3" />
+                            <span>PENDING</span>
+                          </span>
+                        ) : p.status === "COMPLETED" ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300">
+                            <CheckCircle2 className="h-3 w-3" />
+                            <span>APPROVED</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300">
+                            <XCircle className="h-3 w-3" />
+                            <span>REJECTED</span>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInspectingPayment(p);
+                            setZoomLevel(1);
+                            setRotationDegrees(0);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 transition-all cursor-pointer"
+                        >
+                          <Eye className="h-3 w-3 inline mr-1" />
+                          <span>Inspect</span>
+                        </button>
+
+                        {p.status === "MANUAL_REVIEW" && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleReview(p.id, "approve")}
+                              disabled={processingId === p.id}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all cursor-pointer"
+                            >
+                              <Check className="h-3 w-3 inline mr-0.5" />
+                              <span>Approve</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setRejectingPayment(p)}
+                              disabled={processingId === p.id}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all cursor-pointer"
+                            >
+                              <X className="h-3 w-3 inline mr-0.5" />
+                              <span>Reject</span>
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL 1: RECEIPT LIGHTBOX INSPECTOR */}
+      {inspectingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl border border-white/[0.08] bg-[#11131B] p-6 sm:p-8 space-y-6 shadow-[0_8px_30px_rgb(0,0,0,0.7)]">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <CreditCard className="h-5 w-5" />
                 </div>
-
-                {/* Slip Details Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                  {/* Bank Reference */}
-                  <div className="rounded-xl bg-neutral-50 p-3 space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
-                      Transaction Reference
-                    </span>
-                    <div className="flex items-center justify-between font-mono font-bold text-neutral-900 text-sm">
-                      <span className="truncate">{p.bankTxRef}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyToClipboard(p.bankTxRef)}
-                        className="text-neutral-400 hover:text-neutral-700 p-1 rounded-md cursor-pointer"
-                        title="Copy Reference"
-                      >
-                        {copiedRef === p.bankTxRef ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Amount & Plan */}
-                  <div className="rounded-xl bg-neutral-50 p-3 space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
-                      Amount & Plan
-                    </span>
-                    <div className="font-bold text-neutral-900 text-sm font-mono">
-                      {p.amountETB} ETB
-                    </div>
-                    <span className="text-[10px] text-neutral-500 font-medium block">
-                      {p.plan === "MATRIC_SEASON_PASS" ? "High School Season Pass" : p.plan}
-                    </span>
-                  </div>
-
-                  {/* Internal ID */}
-                  <div className="rounded-xl bg-neutral-50 p-3 space-y-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
-                      Qelem Reference
-                    </span>
-                    <div className="font-mono text-neutral-600 text-xs truncate">
-                      {p.txRef}
-                    </div>
-                    {p.email && <span className="text-[10px] text-neutral-400 block truncate">{p.email}</span>}
-                  </div>
-
-                  {/* Receipt Screenshot Button */}
-                  <div className="rounded-xl bg-neutral-50 p-3 space-y-1 flex flex-col justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
-                      Receipt Screenshot
-                    </span>
-                    {p.receiptImageUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => setActiveReceiptImage(p.receiptImageUrl || null)}
-                        className="inline-flex items-center gap-1.5 font-semibold text-blue-600 hover:text-blue-800 text-xs cursor-pointer"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                        <span>Inspect Receipt Image</span>
-                      </button>
-                    ) : (
-                      <span className="text-neutral-400 italic text-[11px]">No image attached (Ref only)</span>
-                    )}
-                  </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Receipt Inspection: {inspectingPayment.candidateName}
+                  </h3>
+                  <p className="text-xs text-neutral-400 font-mono">
+                    Ref: {inspectingPayment.bankTxRef || inspectingPayment.txRef} &bull; {inspectingPayment.amountETB} ETB
+                  </p>
                 </div>
+              </div>
 
-                {/* Admin Note / Rejection Reason if any */}
-                {p.adminNotes && (
-                  <div className="text-xs text-neutral-600 bg-neutral-50 rounded-xl px-3 py-2 border border-neutral-100">
-                    <span className="font-semibold text-neutral-800">Admin Note:</span> {p.adminNotes}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.min(z + 0.25, 2.5))}
+                  className="p-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-neutral-300 hover:text-white"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.max(z - 0.25, 0.75))}
+                  className="p-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-neutral-300 hover:text-white"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRotationDegrees((d) => (d + 90) % 360)}
+                  className="p-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-neutral-300 hover:text-white"
+                  title="Rotate 90 Degrees"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectingPayment(null)}
+                  className="p-1.5 rounded-lg text-neutral-400 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Inspection Stage */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Left (2 cols): Image Stage */}
+              <div className="md:col-span-2 rounded-2xl border border-white/[0.08] bg-[#090A0F] p-4 flex items-center justify-center min-h-[350px] overflow-hidden">
+                {inspectingPayment.receiptImageUrl ? (
+                  <div className="overflow-auto max-h-[450px] max-w-full flex items-center justify-center">
+                    <img
+                      src={inspectingPayment.receiptImageUrl}
+                      alt="Student payment slip"
+                      style={{
+                        transform: `scale(${zoomLevel}) rotate(${rotationDegrees}deg)`,
+                        transition: "transform 0.2s ease-out",
+                      }}
+                      className="rounded-xl max-h-[400px] object-contain shadow-md"
+                    />
                   </div>
-                )}
-
-                {/* Action Buttons */}
-                {isPending && (
-                  <div className="flex items-center justify-end gap-3 pt-2">
-                    <button
-                      type="button"
-                      disabled={isWorking}
-                      onClick={() => handleReview(p.id, "reject")}
-                      className="px-4 py-2 rounded-xl border border-rose-200 bg-rose-50/70 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                    >
-                      Reject Slip
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isWorking}
-                      onClick={() => handleReview(p.id, "approve")}
-                      className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                    >
-                      {isWorking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5 stroke-[3]" />}
-                      <span>Approve & Grant Pro Access</span>
-                    </button>
+                ) : (
+                  <div className="text-center text-neutral-500 space-y-2">
+                    <FileText className="h-10 w-10 mx-auto" />
+                    <p className="text-xs">No screenshot uploaded. Reference provided via bank SMS.</p>
                   </div>
                 )}
               </div>
-            );
-          })
-        )}
-      </div>
 
-      {/* Receipt Image Zoom Modal */}
-      {activeReceiptImage && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-950/80 backdrop-blur-sm animate-in fade-in duration-150"
-          onClick={() => setActiveReceiptImage(null)}
-        >
-          <div
-            className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-neutral-200 space-y-4 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between pb-2 border-b border-neutral-100">
-              <h3 className="text-sm font-bold text-neutral-900">Payment Screenshot Inspection</h3>
+              {/* Right (1 col): Verification Summary */}
+              <div className="space-y-4 text-xs">
+                <div className="p-4 rounded-xl bg-[#181A24] border border-white/[0.06] space-y-2">
+                  <span className="font-mono text-[10px] uppercase text-neutral-500">Transaction Details</span>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Gateway:</span>
+                      <span className="font-bold text-white uppercase">{inspectingPayment.method}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Amount:</span>
+                      <span className="font-mono font-bold text-emerald-400">{inspectingPayment.amountETB} ETB</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Phone:</span>
+                      <span className="font-mono text-neutral-200">{inspectingPayment.phone}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Submitted:</span>
+                      <span className="font-mono text-neutral-400">
+                        {new Date(inspectingPayment.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {inspectingPayment.adminNotes && (
+                  <div className="p-3 rounded-xl bg-[#181A24] border border-white/[0.06] space-y-1">
+                    <span className="font-mono text-[10px] uppercase text-neutral-500">Staff Note</span>
+                    <p className="text-neutral-300">{inspectingPayment.adminNotes}</p>
+                  </div>
+                )}
+
+                {inspectingPayment.status === "MANUAL_REVIEW" ? (
+                  <div className="space-y-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleReview(inspectingPayment.id, "approve")}
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-[0_0_20px_rgba(16,185,129,0.35)] transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <Check className="h-4 w-4" />
+                      <span>Approve & Grant Pro</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRejectingPayment(inspectingPayment);
+                        setInspectingPayment(null);
+                      }}
+                      className="w-full py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-semibold transition-all cursor-pointer"
+                    >
+                      Reject Slip...
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-white/[0.04] text-center font-mono text-neutral-400">
+                    Status: {inspectingPayment.status}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: REJECT WITH PRESET REASON */}
+      {rejectingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl border border-white/[0.08] bg-[#11131B] p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <h3 className="text-base font-bold text-white">Reject Payment Slip</h3>
               <button
                 type="button"
-                onClick={() => setActiveReceiptImage(null)}
-                className="p-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-neutral-600 transition-colors cursor-pointer"
+                onClick={() => setRejectingPayment(null)}
+                className="text-neutral-400 hover:text-white"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="max-h-[70vh] overflow-auto rounded-xl border border-neutral-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={activeReceiptImage}
-                alt="Payment Receipt Slip"
-                className="w-full object-contain"
-              />
+            <div className="space-y-3 text-xs">
+              <p className="text-neutral-400">
+                Specify the rejection reason for <span className="text-white font-bold">{rejectingPayment.candidateName}</span>:
+              </p>
+
+              <div className="space-y-2">
+                {[
+                  "Duplicate transaction reference ID.",
+                  "Amount mismatch — expected 349 ETB for Matric Season Pass.",
+                  "Screenshot is blurred or unreadable. Please resubmit.",
+                  "Beneficiary name does not match Qelem Education account.",
+                  "Invalid CBE / Telebirr transaction confirmation.",
+                ].map((reason) => (
+                  <label
+                    key={reason}
+                    className={`flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer transition-all ${
+                      rejectReason === reason
+                        ? "bg-rose-500/10 border-rose-500/30 text-rose-200"
+                        : "bg-[#181A24] border-white/[0.06] text-neutral-400 hover:text-white"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="rejectPreset"
+                      checked={rejectReason === reason}
+                      onChange={() => setRejectReason(reason)}
+                      className="mt-0.5"
+                    />
+                    <span>{reason}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
-            <p className="text-[11px] text-neutral-400 text-center">
-              Click outside or press Esc to close inspection.
-            </p>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-white/[0.08]">
+              <button
+                type="button"
+                onClick={() => setRejectingPayment(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleReview(rejectingPayment.id, "reject", rejectReason);
+                  setRejectingPayment(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-all cursor-pointer"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: RECORD MANUAL PAYMENT */}
+      {isRecordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl border border-white/[0.08] bg-[#11131B] p-6 sm:p-8 space-y-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <DollarSign className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Record Manual Student Payment</h3>
+                  <p className="text-xs text-neutral-400">Register cash or direct bank transfer payments</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRecordModalOpen(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateManualPayment} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-neutral-300">Candidate Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  placeholder="e.g. Tsion Bekele"
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#181A24] px-3.5 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-neutral-300">Phone Number</label>
+                  <input
+                    type="text"
+                    required
+                    value={manualPhone}
+                    onChange={(e) => setManualPhone(e.target.value)}
+                    placeholder="+2519..."
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#181A24] px-3.5 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-indigo-500 outline-none font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-neutral-300">Payment Gateway</label>
+                  <select
+                    value={manualMethod}
+                    onChange={(e) => setManualMethod(e.target.value as any)}
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#181A24] px-3 py-2 text-xs text-white focus:border-indigo-500 outline-none"
+                  >
+                    <option value="cbe">CBE Branch / Mobile Transfer</option>
+                    <option value="telebirr">Telebirr P2P / Agent</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-neutral-300">Bank Tx Reference ID</label>
+                  <input
+                    type="text"
+                    required
+                    value={manualBankRef}
+                    onChange={(e) => setManualBankRef(e.target.value)}
+                    placeholder="e.g. FT24289MANUAL"
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#181A24] px-3.5 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-indigo-500 outline-none font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-neutral-300">Amount Paid (ETB)</label>
+                  <input
+                    type="number"
+                    required
+                    value={manualAmount}
+                    onChange={(e) => setManualAmount(Number(e.target.value))}
+                    className="w-full rounded-xl border border-white/[0.08] bg-[#181A24] px-3.5 py-2 text-xs text-white focus:border-indigo-500 outline-none font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-neutral-300">Verification Note</label>
+                <input
+                  type="text"
+                  value={manualNote}
+                  onChange={(e) => setManualNote(e.target.value)}
+                  className="w-full rounded-xl border border-white/[0.08] bg-[#181A24] px-3.5 py-2 text-xs text-white focus:border-indigo-500 outline-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/[0.08]">
+                <button
+                  type="button"
+                  onClick={() => setIsRecordModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-[0_0_20px_rgba(79,70,229,0.35)] transition-all cursor-pointer"
+                >
+                  Record & Activate Pro
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -3,14 +3,13 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Bookmark, Menu, X, ArrowRight, Sparkles } from "lucide-react";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import { NAV_ITEMS } from "@/lib/landing-data";
-import AuthModal from "@/components/auth/AuthModal";
 
 export const Navbar: React.FC = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authModalTab, setAuthModalTab] = useState<"signup" | "login">("signup");
+  const { user } = useUser();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -31,12 +30,6 @@ export const Navbar: React.FC = () => {
       document.removeEventListener("scroll", handleScroll);
     };
   }, []);
-
-  const openAuth = (tab: "signup" | "login") => {
-    setAuthModalTab(tab);
-    setAuthModalOpen(true);
-    setMobileMenuOpen(false);
-  };
 
   return (
     <>
@@ -101,25 +94,46 @@ export const Navbar: React.FC = () => {
 
           {/* Desktop Actions */}
           <div className="hidden md:flex items-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={() => openAuth("login")}
-              className="text-xs sm:text-sm font-semibold text-neutral-600 hover:text-neutral-950 px-2.5 sm:px-3 py-1.5 transition-colors cursor-pointer"
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => openAuth("signup")}
-              className={`group inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full bg-neutral-950 text-white shadow-sm transition-all duration-300 hover:bg-neutral-800 active:scale-[0.98] cursor-pointer ${
-                isScrolled
-                  ? "h-9 px-4 text-xs font-semibold"
-                  : "h-10 px-5 text-sm font-medium"
-              }`}
-            >
-              <span>Get Started Free</span>
-              <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-neutral-300 transition-transform group-hover:translate-x-0.5" />
-            </button>
+            {user ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="text-xs sm:text-sm font-semibold text-neutral-600 hover:text-neutral-950 px-2.5 sm:px-3 py-1.5 transition-colors cursor-pointer"
+                >
+                  Dashboard
+                </Link>
+                <a
+                  href="/auth/logout"
+                  className={`group inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full border border-neutral-200/90 bg-white hover:bg-neutral-50 text-neutral-800 shadow-2xs transition-all active:scale-[0.98] cursor-pointer ${
+                    isScrolled
+                      ? "h-9 px-4 text-xs font-semibold"
+                      : "h-10 px-5 text-sm font-medium"
+                  }`}
+                >
+                  <span>Sign Out</span>
+                </a>
+              </>
+            ) : (
+              <>
+                <a
+                  href="/auth/login"
+                  className="text-xs sm:text-sm font-semibold text-neutral-600 hover:text-neutral-950 px-2.5 sm:px-3 py-1.5 transition-colors cursor-pointer"
+                >
+                  Sign In
+                </a>
+                <a
+                  href="/auth/login?screen_hint=signup"
+                  className={`group inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-full bg-neutral-950 text-white shadow-sm transition-all duration-300 hover:bg-neutral-800 active:scale-[0.98] cursor-pointer ${
+                    isScrolled
+                      ? "h-9 px-4 text-xs font-semibold"
+                      : "h-10 px-5 text-sm font-medium"
+                  }`}
+                >
+                  <span>Get Started Free</span>
+                  <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-neutral-300 transition-transform group-hover:translate-x-0.5" />
+                </a>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -164,21 +178,39 @@ export const Navbar: React.FC = () => {
             </div>
 
             <div className="mt-3 pt-3 border-t border-neutral-200 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => openAuth("signup")}
-                className="flex h-10 items-center justify-center gap-2 rounded-full bg-neutral-950 px-4 text-sm font-medium text-white shadow-sm transition-all hover:bg-neutral-800 cursor-pointer"
-              >
-                <Sparkles className="h-4 w-4" />
-                <span>Get Started Free</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openAuth("login")}
-                className="flex h-10 items-center justify-center rounded-full bg-white border border-neutral-200 px-4 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950 transition-all shadow-sm cursor-pointer"
-              >
-                Sign In
-              </button>
+              {user ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex h-10 items-center justify-center gap-2 rounded-full bg-neutral-950 px-4 text-sm font-medium text-white shadow-sm transition-all hover:bg-neutral-800 cursor-pointer"
+                  >
+                    <span>Dashboard</span>
+                  </Link>
+                  <a
+                    href="/auth/logout"
+                    className="flex h-10 items-center justify-center rounded-full bg-white border border-neutral-200 px-4 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950 transition-all shadow-sm cursor-pointer"
+                  >
+                    Sign Out
+                  </a>
+                </>
+              ) : (
+                <>
+                  <a
+                    href="/auth/login?screen_hint=signup"
+                    className="flex h-10 items-center justify-center gap-2 rounded-full bg-neutral-950 px-4 text-sm font-medium text-white shadow-sm transition-all hover:bg-neutral-800 cursor-pointer"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    <span>Get Started Free</span>
+                  </a>
+                  <a
+                    href="/auth/login"
+                    className="flex h-10 items-center justify-center rounded-full bg-white border border-neutral-200 px-4 text-sm font-medium text-neutral-700 hover:bg-neutral-50 hover:text-neutral-950 transition-all shadow-sm cursor-pointer"
+                  >
+                    Sign In
+                  </a>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -186,14 +218,6 @@ export const Navbar: React.FC = () => {
 
       {/* Invisible static layout spacer so document content flow starts beneath the navbar */}
       <div className="h-16 sm:h-20 w-full pointer-events-none" aria-hidden="true" />
-
-      {/* Interactive Split-Screen Auth Modal */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialTab={authModalTab}
-        redirectUrl="/dashboard"
-      />
     </>
   );
 };

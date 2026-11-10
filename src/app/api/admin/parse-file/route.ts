@@ -3,8 +3,7 @@ import { parsePlainTextQuestions } from "@/lib/questionStore";
 import { GradeLevel } from "@/types/curriculum";
 import { createClient } from "@/lib/supabase/server";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdf = require("pdf-parse");
+export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,6 +50,8 @@ export async function POST(req: NextRequest) {
     const fileName = file.name.toLowerCase();
 
     if (fileName.endsWith(".pdf")) {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdf = require("pdf-parse");
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const data = await pdf(buffer);

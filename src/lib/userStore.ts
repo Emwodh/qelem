@@ -326,3 +326,216 @@ export const SUBJECT_MASTERY_DATA: Record<ExamStream, SubjectMastery[]> = {
 export function getSubjectMastery(stream: ExamStream): SubjectMastery[] {
   return SUBJECT_MASTERY_DATA[stream] || SUBJECT_MASTERY_DATA.natural;
 }
+
+export interface CandidateItem {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  stream: ExamStream;
+  grade: 9 | 10 | 11 | 12;
+  targetUniversity: string;
+  targetScore: number;
+  latestDiagnosticScore: number;
+  weakestTopic: string;
+  isPro: boolean;
+  plan: "FREE" | "MONTHLY_PASS" | "MATRIC_SEASON_PASS" | "LIFETIME_PASS";
+  registeredAt: string;
+  activeDevicesCount: number;
+  examAttemptsCount: number;
+  school?: string;
+  region?: string;
+}
+
+const CANDIDATES_STORAGE_KEY = "qelem_registered_candidates_roster";
+
+const INITIAL_DEMO_CANDIDATES: CandidateItem[] = [
+  {
+    id: "cand_001",
+    name: "Dawit Yohannes",
+    phone: "+251911458921",
+    email: "dawit.y@gmail.com",
+    stream: "natural",
+    grade: 12,
+    targetUniversity: "Addis Ababa University (AAU) — Technology (Faculty of Tech)",
+    targetScore: 615,
+    latestDiagnosticScore: 78,
+    weakestTopic: "Electromagnetism (Lenz's Law)",
+    isPro: true,
+    plan: "MATRIC_SEASON_PASS",
+    registeredAt: "2026-09-15T08:30:00Z",
+    activeDevicesCount: 1,
+    examAttemptsCount: 6,
+    school: "Bole Secondary School",
+    region: "Addis Ababa",
+  },
+  {
+    id: "cand_002",
+    name: "Selamawit Tadesse",
+    phone: "+251922334455",
+    email: "selam.t@yahoo.com",
+    stream: "natural",
+    grade: 12,
+    targetUniversity: "Addis Ababa University (AAU) — School of Medicine (Tikur Anbessa)",
+    targetScore: 640,
+    latestDiagnosticScore: 84,
+    weakestTopic: "Organic Chemistry Nomenclature",
+    isPro: true,
+    plan: "MATRIC_SEASON_PASS",
+    registeredAt: "2026-09-18T10:15:00Z",
+    activeDevicesCount: 2,
+    examAttemptsCount: 9,
+    school: "Nazareth School",
+    region: "Addis Ababa",
+  },
+  {
+    id: "cand_003",
+    name: "Yared Bekele",
+    phone: "+251933778899",
+    email: "yared.b@gmail.com",
+    stream: "natural",
+    grade: 12,
+    targetUniversity: "Adama Science & Technology University (ASTU) — Engineering",
+    targetScore: 580,
+    latestDiagnosticScore: 71,
+    weakestTopic: "Integration by Substitution",
+    isPro: true,
+    plan: "MATRIC_SEASON_PASS",
+    registeredAt: "2026-09-20T14:00:00Z",
+    activeDevicesCount: 1,
+    examAttemptsCount: 4,
+    school: "Adama Model Secondary School",
+    region: "Oromia",
+  },
+  {
+    id: "cand_004",
+    name: "Bethlehem Haile",
+    phone: "+251944112233",
+    email: "bethlehem.h@outlook.com",
+    stream: "social",
+    grade: 12,
+    targetUniversity: "Addis Ababa University (AAU) — College of Business and Economics",
+    targetScore: 560,
+    latestDiagnosticScore: 69,
+    weakestTopic: "Fiscal vs Monetary Policy",
+    isPro: false,
+    plan: "FREE",
+    registeredAt: "2026-10-02T11:20:00Z",
+    activeDevicesCount: 1,
+    examAttemptsCount: 2,
+    school: "St. Joseph School",
+    region: "Addis Ababa",
+  },
+  {
+    id: "cand_005",
+    name: "Kalkidan Girma",
+    phone: "+251955667788",
+    email: "kalkidan.g@gmail.com",
+    stream: "natural",
+    grade: 11,
+    targetUniversity: "Addis Ababa Science & Technology University (AASTU) — Engineering",
+    targetScore: 595,
+    latestDiagnosticScore: 62,
+    weakestTopic: "Chemical Equilibrium & Le Chatelier",
+    isPro: false,
+    plan: "FREE",
+    registeredAt: "2026-10-08T09:45:00Z",
+    activeDevicesCount: 1,
+    examAttemptsCount: 1,
+    school: "Hawassa Tabor Secondary",
+    region: "Sidama",
+  },
+  {
+    id: "cand_006",
+    name: "Abel Tesfaye",
+    phone: "+251966224466",
+    email: "abel.t@gmail.com",
+    stream: "social",
+    grade: 12,
+    targetUniversity: "Jimma University — Institute of Technology (JiT)",
+    targetScore: 540,
+    latestDiagnosticScore: 66,
+    weakestTopic: "Horn of Africa Climatology",
+    isPro: true,
+    plan: "MONTHLY_PASS",
+    registeredAt: "2026-10-12T16:10:00Z",
+    activeDevicesCount: 2,
+    examAttemptsCount: 5,
+    school: "Fasiledes Secondary School",
+    region: "Amhara",
+  },
+];
+
+export function getAllCandidates(): CandidateItem[] {
+  if (typeof window === "undefined") return INITIAL_DEMO_CANDIDATES;
+  try {
+    const raw = localStorage.getItem(CANDIDATES_STORAGE_KEY);
+    if (!raw) {
+      localStorage.setItem(CANDIDATES_STORAGE_KEY, JSON.stringify(INITIAL_DEMO_CANDIDATES));
+      return INITIAL_DEMO_CANDIDATES;
+    }
+    return JSON.parse(raw);
+  } catch {
+    return INITIAL_DEMO_CANDIDATES;
+  }
+}
+
+export function saveAllCandidates(candidates: CandidateItem[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(CANDIDATES_STORAGE_KEY, JSON.stringify(candidates));
+  } catch (err) {
+    console.error("Failed saving candidates roster:", err);
+  }
+}
+
+export function updateCandidateProAccess(
+  candidateId: string,
+  isPro: boolean,
+  plan: CandidateItem["plan"] = "MATRIC_SEASON_PASS"
+): CandidateItem | null {
+  const list = getAllCandidates();
+  const target = list.find((c) => c.id === candidateId || c.email === candidateId || c.phone === candidateId);
+  if (!target) return null;
+
+  target.isPro = isPro;
+  target.plan = isPro ? plan : "FREE";
+  saveAllCandidates(list);
+  return target;
+}
+
+export function resetCandidateDevices(candidateId: string): boolean {
+  const list = getAllCandidates();
+  const target = list.find((c) => c.id === candidateId || c.email === candidateId || c.phone === candidateId);
+  if (!target) return false;
+
+  target.activeDevicesCount = 0;
+  saveAllCandidates(list);
+  return true;
+}
+
+export function registerCandidateRecord(candidate: Partial<CandidateItem>): CandidateItem {
+  const list = getAllCandidates();
+  const newCandidate: CandidateItem = {
+    id: candidate.id || `cand_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    name: candidate.name || "Student Candidate",
+    phone: candidate.phone || "+251900000000",
+    email: candidate.email || `candidate_${Date.now()}@qelem.et`,
+    stream: candidate.stream || "natural",
+    grade: candidate.grade || 12,
+    targetUniversity: candidate.targetUniversity || "Addis Ababa University (AAU) — Technology (Faculty of Tech)",
+    targetScore: candidate.targetScore || 585,
+    latestDiagnosticScore: candidate.latestDiagnosticScore || 0,
+    weakestTopic: candidate.weakestTopic || "Pending Evaluation",
+    isPro: Boolean(candidate.isPro),
+    plan: candidate.plan || (candidate.isPro ? "MATRIC_SEASON_PASS" : "FREE"),
+    registeredAt: new Date().toISOString(),
+    activeDevicesCount: 1,
+    examAttemptsCount: 0,
+    school: candidate.school || "General Secondary School",
+    region: candidate.region || "Addis Ababa",
+  };
+
+  saveAllCandidates([newCandidate, ...list]);
+  return newCandidate;
+}

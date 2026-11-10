@@ -22,7 +22,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { UserProfile } from "@/types/user";
-import AuthModal from "@/components/auth/AuthModal";
 
 interface SidebarProps {
   profile: UserProfile | null;
@@ -44,7 +43,6 @@ export default function Sidebar({
   onMobileClose,
 }: SidebarProps) {
   const pathname = usePathname();
-  const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const studentNav = [
     {
@@ -259,26 +257,17 @@ export default function Sidebar({
             {!isCollapsed && <span>Sign Out</span>}
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={() => setAuthModalOpen(true)}
+          <a
+            href="/auth/login?returnTo=/dashboard"
             className={`group flex w-full items-center gap-3 rounded-xl bg-neutral-950 hover:bg-neutral-800 text-white px-3 py-2.5 text-xs font-semibold shadow-xs transition-all cursor-pointer ${
               isCollapsed ? "justify-center px-2" : "justify-center"
             }`}
           >
             <GraduationCap className="h-4 w-4" />
             {!isCollapsed && <span>Candidate Sign In</span>}
-          </button>
+          </a>
         )}
       </div>
-
-      {/* Auth Modal Trigger for Sidebar */}
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialTab="login"
-        redirectUrl="/dashboard"
-      />
     </div>
   );
 

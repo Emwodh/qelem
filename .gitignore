@@ -31,3 +31,8 @@ Thumbs.db
 # Editor configurations
 .vscode/
 .idea/
+
+# Agent teamwork & scratch files
+.agents/teamwork/
+scratch/
+

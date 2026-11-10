@@ -4,6 +4,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 import NavigationProgress from "@/components/ui/NavigationProgress";
+import { Auth0Provider } from "@auth0/nextjs-auth0/client";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -58,7 +59,7 @@ export default function RootLayout({
         <Suspense fallback={null}>
           <NavigationProgress />
         </Suspense>
-        {children}
+        <Auth0Provider>{children}</Auth0Provider>
       </body>
     </html>
   );

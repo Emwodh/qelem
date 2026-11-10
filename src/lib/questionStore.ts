@@ -9,11 +9,16 @@ const CUSTOM_QUESTIONS_STORAGE_KEY = "qelem_custom_questions_bank";
  */
 export function getAllQuestions(): ExamQuestion[] {
   let custom: ExamQuestion[] = [];
+  let deletedIds: string[] = [];
   if (typeof window !== "undefined") {
     try {
       const raw = localStorage.getItem(CUSTOM_QUESTIONS_STORAGE_KEY);
       if (raw) {
         custom = JSON.parse(raw);
+      }
+      const delRaw = localStorage.getItem("qelem_deleted_question_ids");
+      if (delRaw) {
+        deletedIds = JSON.parse(delRaw);
       }
     } catch (err) {
       console.error("Error reading custom questions from localStorage:", err);
@@ -22,8 +27,16 @@ export function getAllQuestions(): ExamQuestion[] {
 
   // Merge unique by ID
   const map = new Map<string, ExamQuestion>();
-  CURRICULUM_QUESTIONS.forEach((q) => map.set(q.id, q));
-  custom.forEach((q) => map.set(q.id, q));
+  CURRICULUM_QUESTIONS.forEach((q) => {
+    if (!deletedIds.includes(q.id)) {
+      map.set(q.id, q);
+    }
+  });
+  custom.forEach((q) => {
+    if (!deletedIds.includes(q.id)) {
+      map.set(q.id, q);
+    }
+  });
 
   return Array.from(map.values());
 }
@@ -167,6 +180,65 @@ export async function saveQuestionsBulk(newQuestions: ExamQuestion[]): Promise<n
   }
 
   return newQuestions.length;
+}
+
+/**
+ * Updates a single question in the bank
+ */
+export async function updateSingleQuestion(updatedQuestion: ExamQuestion): Promise<ExamQuestion> {
+  await saveQuestionsBulk([updatedQuestion]);
+  return updatedQuestion;
+}
+
+/**
+ * Deletes a question by ID from the bank
+ */
+export async function deleteSingleQuestion(questionId: string): Promise<boolean> {
+  if (typeof window !== "undefined") {
+    try {
+      const existingRaw = localStorage.getItem(CUSTOM_QUESTIONS_STORAGE_KEY);
+      const existing: ExamQuestion[] = existingRaw ? JSON.parse(existingRaw) : [];
+      const filtered = existing.filter((q) => q.id !== questionId);
+      localStorage.setItem(CUSTOM_QUESTIONS_STORAGE_KEY, JSON.stringify(filtered));
+
+      // Also track deleted seed question IDs so they don't reappear
+      const deletedKey = "qelem_deleted_question_ids";
+      const deletedRaw = localStorage.getItem(deletedKey);
+      const deletedIds: string[] = deletedRaw ? JSON.parse(deletedRaw) : [];
+      if (!deletedIds.includes(questionId)) {
+        deletedIds.push(questionId);
+        localStorage.setItem(deletedKey, JSON.stringify(deletedIds));
+      }
+    } catch (err) {
+      console.error("Failed to delete question from storage:", err);
+      return false;
+    }
+  }
+
+  if (isSupabaseConfigured()) {
+    try {
+      const supabase = createClient();
+      await supabase.from("questions").delete().eq("id", questionId);
+    } catch (err) {
+      console.warn("Supabase question delete bypassed:", err);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Resets question bank storage
+ */
+export function resetQuestionBank(): void {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(CUSTOM_QUESTIONS_STORAGE_KEY);
+      localStorage.removeItem("qelem_deleted_question_ids");
+    } catch (err) {
+      console.error("Failed to reset question bank:", err);
+    }
+  }
 }
 
 /**

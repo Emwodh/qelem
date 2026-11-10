@@ -8,8 +8,9 @@ import {
   Clock,
   LogOut,
 } from "lucide-react";
-import { getUserProfile, getExamCountdown } from "@/lib/userStore";
+import { getUserProfile, getExamCountdown, loginCandidate, logoutCandidate } from "@/lib/userStore";
 import { UserProfile } from "@/types/user";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import {
   createClient as createBrowserSupabaseClient,
   isSupabaseConfigured,
@@ -21,6 +22,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { user } = useUser();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isCollapsed, setIsCollapsed] = useState<boolean>(false);
@@ -30,22 +32,31 @@ export default function DashboardLayout({
   useEffect(() => {
     setProfile(getUserProfile());
 
-    if (isSupabaseConfigured()) {
+    if (user) {
+      setIsAuthenticated(true);
+      const candidateName =
+        user.name ||
+        user.nickname ||
+        (user.email ? user.email.split("@")[0] : "Candidate");
+      loginCandidate(user.email || "student@qelem.edu.et", candidateName);
+      setProfile(getUserProfile());
+    } else if (isSupabaseConfigured()) {
       const supabase = createBrowserSupabaseClient();
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        if (user) {
+      supabase.auth.getUser().then(({ data: { user: sbUser } }) => {
+        if (sbUser) {
           setIsAuthenticated(true);
-          const metaName = user.user_metadata?.full_name;
+          const metaName = sbUser.user_metadata?.full_name;
           if (metaName) {
             setProfile((prev) => (prev ? { ...prev, name: metaName } : prev));
           }
         }
       });
     }
-  }, []);
+  }, [user]);
 
   const handleSignOut = async () => {
     try {
+      logoutCandidate();
       if (isSupabaseConfigured()) {
         const supabase = createBrowserSupabaseClient();
         await supabase.auth.signOut();
@@ -54,7 +65,7 @@ export default function DashboardLayout({
       console.warn("Sign out notice:", err);
     } finally {
       setIsAuthenticated(false);
-      window.location.href = "/";
+      window.location.href = "/auth/logout";
     }
   };
 
@@ -148,12 +159,12 @@ export default function DashboardLayout({
                   <LogOut className="h-4 w-4" />
                 </button>
               ) : (
-                <Link
-                  href="/login"
+                <a
+                  href="/auth/login?returnTo=/dashboard"
                   className="ml-1 inline-flex items-center rounded-lg bg-neutral-950 hover:bg-neutral-800 text-white px-2.5 py-1 text-[11px] font-semibold transition-all shadow-xs"
                 >
                   Sign In
-                </Link>
+                </a>
               )}
             </div>
           </div>
