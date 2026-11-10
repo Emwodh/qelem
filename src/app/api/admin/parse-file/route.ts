@@ -1,33 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parsePlainTextQuestions } from "@/lib/questionStore";
 import { GradeLevel } from "@/types/curriculum";
-import { createClient } from "@/lib/supabase/server";
+import { verifyAdminApiRequest } from "@/lib/adminAuth";
+import { auth0, isAuth0Configured } from "@/lib/auth0";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const adminKey = req.headers.get("x-admin-key");
-    const validAdminKey = process.env.ADMIN_SECRET_KEY;
-    const isKeyAuthorized = Boolean(
-      validAdminKey && adminKey && adminKey.trim() === validAdminKey.trim()
-    );
+    // 1. Admin Authorization Gate (x-admin-key or qelem_admin_token cookie)
+    const authCheck = verifyAdminApiRequest(req);
+    let isAuthorized = authCheck.authorized;
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    if (!isAuthorized && isAuth0Configured()) {
+      try {
+        const session = await auth0.getSession(req);
+        const user = session?.user;
+        if (
+          user &&
+          (user.role === "admin" ||
+            user["https://qelem.et/roles"]?.includes("admin") ||
+            user.user_metadata?.is_admin === true ||
+            (user.email && process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL))
+        ) {
+          isAuthorized = true;
+        }
+      } catch {
+        isAuthorized = false;
+      }
+    }
 
-    const isAdminUser = Boolean(
-      user &&
-        (user.app_metadata?.role === "admin" ||
-          user.user_metadata?.is_admin === true ||
-          (user.email && process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL))
-    );
-
-    if (!isAdminUser && !isKeyAuthorized) {
+    if (!isAuthorized) {
       return NextResponse.json(
-        { error: "Unauthorized: Admin privileges required" },
+        { error: authCheck.error || "Unauthorized: Admin privileges required" },
         { status: 401 }
       );
     }
@@ -61,7 +66,15 @@ export async function POST(req: NextRequest) {
       textContent = await file.text();
     }
 
-    const questions = parsePlainTextQuestions(textContent, {
+    if (!textContent || textContent.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Uploaded file is empty or could not be decoded." },
+        { status: 400 }
+      );
+    }
+
+    // Parse extracted text into structured exam questions
+    const parsedQuestions = parsePlainTextQuestions(textContent, {
       subject,
       subjectId,
       grade,
@@ -76,15 +89,14 @@ export async function POST(req: NextRequest) {
       fileName: file.name,
       fileType: fileName.endsWith(".pdf") ? "pdf" : "markdown",
       extractedCharCount: textContent.length,
-      rawText: textContent,
-      questionsCount: questions.length,
-      questions,
+      rawText: textContent.slice(0, 5000),
+      questionsCount: parsedQuestions.length,
+      questions: parsedQuestions,
     });
-  } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : "Failed to parse file";
-    console.error("File parse error:", errorMessage);
+  } catch (err: any) {
+    console.error("Parse-file endpoint error:", err);
     return NextResponse.json(
-      { error: errorMessage },
+      { error: "Failed to parse file", details: err?.message },
       { status: 500 }
     );
   }

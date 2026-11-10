@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "tsc --noEmit",
     "type-check": "tsc --noEmit",
-    "test": "node scripts/verify-auth0-integration.mjs",
+    "test": "node scripts/verify-auth0-integration.mjs && node --experimental-strip-types scripts/test-admin-gate.mjs",
+    "test:admin": "node --experimental-strip-types scripts/test-admin-gate.mjs",
     "test:auth": "node scripts/verify-auth0-integration.mjs"
   },
   "dependencies": {

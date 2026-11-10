@@ -1,31 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLocalPayments } from "@/lib/paymentStore";
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
+import { verifyAdminApiRequest } from "@/lib/adminAuth";
+import { auth0, isAuth0Configured } from "@/lib/auth0";
 
 export async function GET(req: NextRequest) {
   try {
-    // 1. Verify Admin Credentials
-    const adminKey = req.headers.get("x-admin-key");
-    const validKey = process.env.ADMIN_SECRET_KEY;
-    const isAuthorized = Boolean(validKey && adminKey && adminKey.trim() === validKey.trim());
+    // 1. Verify Admin Credentials (x-admin-key or qelem_admin_token cookie)
+    const authCheck = verifyAdminApiRequest(req);
+    let isAuthorized = authCheck.authorized;
 
-    if (!isAuthorized) {
-      // Also check if admin session cookie exists in Supabase
-      const supabase = await createServerSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      const isAdminUser = Boolean(
-        user &&
-          (user.app_metadata?.role === "admin" ||
+    // Optional Auth0 admin session check
+    if (!isAuthorized && isAuth0Configured()) {
+      try {
+        const session = await auth0.getSession(req);
+        const user = session?.user;
+        if (
+          user &&
+          (user.role === "admin" ||
+            user["https://qelem.et/roles"]?.includes("admin") ||
             user.user_metadata?.is_admin === true ||
             (user.email && process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL))
-      );
-
-      if (!isAdminUser) {
-        return NextResponse.json(
-          { error: "Unauthorized: Administrator privileges required." },
-          { status: 401 }
-        );
+        ) {
+          isAuthorized = true;
+        }
+      } catch {
+        isAuthorized = false;
       }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: authCheck.error || "Unauthorized: Administrator privileges required." },
+        { status: 401 }
+      );
     }
 
     const statusFilter = req.nextUrl.searchParams.get("status") || "all";
@@ -65,18 +73,22 @@ export async function GET(req: NextRequest) {
         payments = Array.from(map.values());
       }
     } catch {
-      // Fallback cleanly to local store
+      // In dev or offline fallback, continue with local store
     }
 
+    // Filter by status if requested
     if (statusFilter !== "all") {
       payments = payments.filter((p) => p.status === statusFilter);
     }
 
-    return NextResponse.json({ payments });
-  } catch (error: any) {
-    console.error("Error retrieving admin payment queue:", error);
+    return NextResponse.json({
+      success: true,
+      count: payments.length,
+      payments,
+    });
+  } catch (err: any) {
     return NextResponse.json(
-      { error: "Failed to load payment receipts", details: error?.message },
+      { error: "Internal server error fetching payments", details: err?.message },
       { status: 500 }
     );
   }

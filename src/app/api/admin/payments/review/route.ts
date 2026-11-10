@@ -1,30 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
-import { updatePaymentStatus, getLocalPayments } from "@/lib/paymentStore";
+import { updatePaymentStatus } from "@/lib/paymentStore";
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
+import { verifyAdminApiRequest } from "@/lib/adminAuth";
+import { auth0, isAuth0Configured } from "@/lib/auth0";
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Admin Authorization Gate
-    const adminKey = req.headers.get("x-admin-key");
-    const validKey = process.env.ADMIN_SECRET_KEY;
-    const isAuthorized = Boolean(validKey && adminKey && adminKey.trim() === validKey.trim());
+    // 1. Admin Authorization Gate (x-admin-key or qelem_admin_token cookie)
+    const authCheck = verifyAdminApiRequest(req);
+    let isAuthorized = authCheck.authorized;
 
-    if (!isAuthorized) {
-      const supabase = await createServerSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      const isAdminUser = Boolean(
-        user &&
-          (user.app_metadata?.role === "admin" ||
+    if (!isAuthorized && isAuth0Configured()) {
+      try {
+        const session = await auth0.getSession(req);
+        const user = session?.user;
+        if (
+          user &&
+          (user.role === "admin" ||
+            user["https://qelem.et/roles"]?.includes("admin") ||
             user.user_metadata?.is_admin === true ||
             (user.email && process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL))
-      );
-
-      if (!isAdminUser) {
-        return NextResponse.json(
-          { error: "Unauthorized: Admin privileges required." },
-          { status: 401 }
-        );
+        ) {
+          isAuthorized = true;
+        }
+      } catch {
+        isAuthorized = false;
       }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: authCheck.error || "Unauthorized: Admin privileges required." },
+        { status: 401 }
+      );
     }
 
     const body = await req.json().catch(() => ({}));
@@ -47,44 +55,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. If approved and associated with a Supabase user, activate their Pro subscription
-    if (action === "approve") {
+    // 2. If approved and associated with a user, activate their Pro subscription in Supabase if reachable
+    if (newStatus === "COMPLETED" && updated.userId) {
       try {
         const supabase = await createServerSupabaseClient();
-        if (updated.userId) {
-          await supabase
-            .from("profiles")
-            .update({
-              is_pro: true,
-              plan: updated.plan || "MATRIC_SEASON_PASS",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", updated.userId);
-        } else if (updated.email) {
-          // If signed up via email
-          await supabase
-            .from("profiles")
-            .update({
-              is_pro: true,
-              plan: updated.plan || "MATRIC_SEASON_PASS",
-              updated_at: new Date().toISOString(),
-            })
-            .eq("email", updated.email);
-        }
+        await supabase
+          .from("profiles")
+          .update({
+            is_pro: true,
+            pro_plan: updated.plan,
+            pro_activated_at: new Date().toISOString(),
+          })
+          .eq("id", updated.userId);
       } catch (dbErr) {
-        console.warn("Could not update candidate profile to Pro in Supabase:", dbErr);
+        console.warn("Could not sync Pro entitlement to Supabase profile:", dbErr);
       }
     }
 
     return NextResponse.json({
       success: true,
-      message: action === "approve" ? "Payment verified and candidate upgraded to Pro." : "Payment marked as rejected.",
+      message:
+        newStatus === "COMPLETED"
+          ? "Payment verified and candidate upgraded to Pro."
+          : "Payment rejected.",
       payment: updated,
     });
-  } catch (error: any) {
-    console.error("Error reviewing payment receipt:", error);
+  } catch (err: any) {
     return NextResponse.json(
-      { error: "Failed to process payment review", details: error?.message },
+      { error: "Internal server error processing review", details: err?.message },
       { status: 500 }
     );
   }

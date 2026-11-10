@@ -46,15 +46,28 @@ export default function AdminLayout({
   const [passkeyError, setPasskeyError] = useState<string>("");
   const [isValidating, setIsValidating] = useState<boolean>(false);
 
-  // Check saved passkey on mount
+  // Check saved session on mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = sessionStorage.getItem("qelem_admin_key");
-      if (saved) {
-        setIsUnlocked(true);
+    let isMounted = true;
+    async function checkSession() {
+      try {
+        const res = await fetch("/api/admin/verify");
+        if (res.ok && isMounted) {
+          setIsUnlocked(true);
+        } else if (typeof window !== "undefined" && sessionStorage.getItem("qelem_admin_unlocked") === "true") {
+          // If session storage had it, re-verify or keep until server check finishes
+          setIsUnlocked(false);
+        }
+      } catch {
+        if (isMounted) setIsUnlocked(false);
+      } finally {
+        if (isMounted) setIsCheckingSavedKey(false);
       }
     }
-    setIsCheckingSavedKey(false);
+    checkSession();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const unlockAdmin = async (key: string): Promise<boolean> => {
@@ -70,45 +83,35 @@ export default function AdminLayout({
         body: JSON.stringify({ key: trimmed }),
       });
 
-      if (res.ok) {
-        sessionStorage.setItem("qelem_admin_key", trimmed);
-        if (typeof document !== "undefined") {
-          document.cookie = `qelem_admin_key=${encodeURIComponent(trimmed)}; path=/; max-age=86400`;
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.valid) {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem("qelem_admin_unlocked", "true");
         }
         setIsUnlocked(true);
         setIsValidating(false);
         return true;
+      } else {
+        setPasskeyError(data.error || "Invalid passkey. Access to administrative node denied.");
       }
     } catch {
-      // Offline fallback
+      setPasskeyError("Network error contacting security node. Try again.");
     }
 
-    // Supported administrative passkeys & local development keys
-    if (
-      trimmed === "qelem-admin-2017" ||
-      trimmed === "qelem_admin_2026" ||
-      trimmed === "admin123"
-    ) {
-      sessionStorage.setItem("qelem_admin_key", trimmed);
-      if (typeof document !== "undefined") {
-        document.cookie = `qelem_admin_key=${encodeURIComponent(trimmed)}; path=/; max-age=86400`;
-      }
-      setIsUnlocked(true);
-      setIsValidating(false);
-      return true;
-    }
-
-    setPasskeyError("Invalid passkey. Access to administrative node denied.");
     setIsValidating(false);
     return false;
   };
 
-  const lockAdmin = () => {
+  const lockAdmin = async () => {
+    try {
+      await fetch("/api/admin/verify", { method: "DELETE" });
+    } catch {
+      // Ignore network failure on logout
+    }
     if (typeof window !== "undefined") {
+      sessionStorage.removeItem("qelem_admin_unlocked");
       sessionStorage.removeItem("qelem_admin_key");
-      if (typeof document !== "undefined") {
-        document.cookie = "qelem_admin_key=; path=/; max-age=0";
-      }
     }
     setIsUnlocked(false);
     setPasskeyInput("");
