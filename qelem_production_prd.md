@@ -82,10 +82,13 @@ graph TD
 6. **Administrative Portal (`/admin/questions`):**
    - Internal question authoring interface with live KaTeX dual-pane preview, difficulty tags, and step-by-step derivation input.
 
-### 2.2 Baseline Technical Architecture
-* **Frontend:** Next.js 15 (App Router, Server & Client Components), React 19, TypeScript, Tailwind CSS.
-* **Math Pipeline:** Custom KaTeX tokenizer (`MathRenderer.tsx`) supporting both display equations (`$$...$$`) and baseline-aligned inline formulas (`$...$`).
-* **Database & Auth:** Supabase PostgreSQL with Row-Level Security (RLS). Tables initialized: `profiles`, `practice_sessions`. LocalStorage fallback store (`userStore.ts`) ensures seamless demo experience without hard auth blocks.
+### 2.2 Reconciled Production Technical Architecture
+* **Frontend Framework:** Next.js 16 (App Router, Server & Client Components, Turbopack builds), React 19, TypeScript 5.7, Tailwind CSS.
+* **Typesetting & STEM:** Custom KaTeX tokenizer (`MathRenderer.tsx`) supporting both display equations (`$$...$$`) and baseline-aligned inline formulas (`$...$`) without layout shift.
+* **Identity & Authentication:** **Auth0 Next.js SDK (`@auth0/nextjs-auth0` v4)** providing enterprise OIDC, PKCE authorization code flows, Universal Login, and session management via `proxy.ts`. Complete physical and architectural segregation between student portal (`/(dashboard)`) and administrative operations (`/admin`).
+* **Database & Data Layer:** **Supabase PostgreSQL** with Row-Level Security (RLS) for cloud persistence (`profiles`, `questions`, `mock_exam_sessions`, `mistake_bank`, `payments`).
+* **Local-First & Offline Resilience:** Resilient local client stores (`userStore.ts`, `questionStore.ts`, `paymentStore.ts`, `mistakeStore.ts`) and **Serwist PWA service worker** (`public/sw.js`) guarantee full functionality, offline practice, and zero data loss even during severe cellular interruptions or database downtime.
+* **Payment Rails:** Native Ethiopian Payment Processing (Direct Telebirr and Commercial Bank of Ethiopia / CBE manual transfer reference verification and slip upload via `/api/payments/manual` and `/admin/payments`, with optional automated Chapa gateway).
 
 ### 2.3 Known Technical Debt & UX Friction Points
 1. **Static Bundle Data Seed:** Questions and learning cheat sheets currently reside in bundled TypeScript objects (`curriculumData.ts`, `cheatSheetData.ts`). This limits bank scalability beyond 1,000 questions and prevents real-time dynamic content curation.
@@ -276,42 +279,59 @@ Scenario: Candidate flags question for review
 
 ```mermaid
 graph TB
-    subgraph Client Layer
-        Web["Next.js 15 PWA Client<br/>(Desktop & Mobile)"]
-        TMA["Telegram Mini App (TMA)<br/>(Webview)"]
+    subgraph ClientLayer ["Client & PWA Layer (Next.js 16 + React 19)"]
+        Web["Web & Mobile PWA (/dashboard, /mock-exams)"]
+        AdminWeb["Admin Command Portal (/admin)"]
+        SW["Serwist Service Worker (public/sw.js)"]
+        LocalCache["Local-First Store (localStorage & IndexedDB)"]
     end
 
-    subgraph Edge & API Gateway
-        Vercel["Vercel Edge Network / SSR"]
-        AuthMiddleware["Supabase Auth Middleware<br/>(JWT Verification)"]
+    subgraph SecurityLayer ["Security & Routing Guard (src/proxy.ts)"]
+        Proxy["Next.js Proxy / Middleware"]
+        Auth0Guard["Auth0 Session & OIDC PKCE Guard"]
+        AdminGuard["Admin Secret Passkey & Key Verifier"]
     end
 
-    subgraph Application Services
-        NextAPI["Next.js Route Handlers<br/>• /api/payments/*<br/>• /api/curriculum/*<br/>• /api/mock-exams/*"]
-        KaTeX["Client KaTeX Math Engine"]
+    subgraph ApplicationServices ["Next.js App Router API Handlers"]
+        ExamStart["/api/exams/start (Sanitized Question Delivery)"]
+        ExamHeartbeat["/api/exams/[id]/heartbeat (Progress Sync)"]
+        ExamSubmit["/api/exams/[id]/submit (Server Grading Engine)"]
+        ManualPay["/api/payments/manual (CBE & Telebirr Slip Ingest)"]
+        AdminPay["/api/admin/payments/review (Approval Portal)"]
+        AdminIngest["/api/admin/parse-file (PDF / Text Ingestion)"]
     end
 
-    subgraph Backend & Storage (Supabase)
-        Postgres[(PostgreSQL 15)]
+    subgraph IdentityLayer ["Identity & Access (Auth0)"]
+        Auth0Hub["Auth0 Universal Login & PKCE Flow"]
+    end
+
+    subgraph BackendStorage ["Database & Persistent Storage (Supabase)"]
+        Postgres[(PostgreSQL Database)]
         RLS["Row Level Security Engine"]
-        FTS["Full Text Search (tsvector)"]
-        Storage["Supabase Storage<br/>(Question Diagrams)"]
+        QuestionsTable["public.questions (102+ Seeded Questions)"]
+        MistakeBank["public.mistake_bank (Spaced Repetition)"]
+        PaymentsTable["public.payments (Slip Review Queue)"]
     end
 
-    subgraph External Services
-        Chapa["Chapa Payment Gateway<br/>(Telebirr / CBE / Cards)"]
-        TeleHook["Telegram Bot API"]
+    subgraph ExternalPaymentRails ["Ethiopian Payment Rails"]
+        Telebirr["Telebirr Mobile Money (0911 23 45 67)"]
+        CBE["Commercial Bank of Ethiopia (1000 4567 89123)"]
+        Chapa["Optional Chapa Gateway"]
     end
 
-    Web --> Vercel
-    TMA --> Vercel
-    Vercel --> AuthMiddleware
-    AuthMiddleware --> NextAPI
-    NextAPI --> Chapa
-    NextAPI --> RLS
+    Web --> Proxy
+    AdminWeb --> Proxy
+    Proxy --> Auth0Guard
+    Proxy --> AdminGuard
+    Auth0Guard --> Auth0Hub
+    Proxy --> ApplicationServices
+    ApplicationServices --> RLS
     RLS --> Postgres
-    Postgres --> FTS
-    Chapa -. Webhook .-> NextAPI
+    Web <--> LocalCache
+    Web --> SW
+    ManualPay --> PaymentsTable
+    Telebirr -. Manual Transfer .-> ManualPay
+    CBE -. Mobile Banking .-> ManualPay
 ```
 
 ---

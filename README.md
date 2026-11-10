@@ -168,7 +168,7 @@ qelem/
 ### Prerequisites
 
 - **Node.js**: `v20.x` or later (LTS recommended)
-- **Package Manager**: `npm` (v10+), `pnpm` (v9+), or `yarn` (v1.22+)
+- **Package Manager**: `npm` (v10+ required; single source of truth `package-lock.json`)
 - **Supabase Project**: Free or Pro instance on [supabase.com](https://supabase.com)
 - **Auth0 Tenant**: Free or Production tenant on [auth0.com](https://auth0.com)
 
@@ -285,4 +285,8 @@ We follow standard Git branching hygiene and Conventional Commits:
 
 ## License
 
-This project is proprietary and confidential. All rights reserved by the Qelem Development Team.
+This project is governed by the [Qelem Platform License & Terms of Educational Use](LICENSE). 
+
+- Software architecture, original derivations, and UI/UX are Proprietary (Copyright © 2026 Qelem Development Team).
+- National exam questions and curriculum syllabi are property of the FDRE Ministry of Education / Educational Assessment and Examinations Service (EAES) and curated under educational fair-use principles.
+
