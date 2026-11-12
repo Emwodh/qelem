@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { submitPaymentRecord, getLocalPayments } from "@/lib/paymentStore";
 import { ManualPaymentSubmission } from "@/types/payment";
-import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
+import { createClient as createServerSupabaseClient, createServiceClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { enforceRateLimit } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  // 1. Enforce Rate Limiting (5 payment submissions per 10 minutes per IP)
+  const rl = await enforceRateLimit(req, 5, 600, "pay_submit");
+  if (!rl.success) {
+    const retryAfter = Math.ceil((rl.resetAt - Date.now()) / 1000);
+    return NextResponse.json(
+      { error: "Too many payment submission attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
+    );
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     const {
@@ -18,7 +29,7 @@ export async function POST(req: NextRequest) {
       receiptImageUrl,
     } = body;
 
-    // 1. Mandatory Input Validation
+    // 2. Mandatory Input Validation
     if (!candidateName || typeof candidateName !== "string" || !candidateName.trim()) {
       return NextResponse.json(
         { error: "Candidate full name is required." },
@@ -47,7 +58,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2. Production safety check
+    // 3. Production safety check
     const isProduction = process.env.NODE_ENV === "production";
     if (isProduction && !isSupabaseConfigured()) {
       return NextResponse.json(
@@ -57,6 +68,18 @@ export async function POST(req: NextRequest) {
         },
         { status: 503 }
       );
+    }
+
+    // Resolve authenticated user if logged in
+    let authenticatedUserId: string | null = null;
+    try {
+      const supabase = await createServerSupabaseClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        authenticatedUserId = user.id;
+      }
+    } catch {
+      // Unauthenticated guest submission allowed in dev or initial registration
     }
 
     const submission: ManualPaymentSubmission = {
@@ -70,28 +93,24 @@ export async function POST(req: NextRequest) {
       receiptImageUrl: receiptImageUrl || undefined,
     };
 
-    // 3. Persist to payment store
+    // 4. Persist to payment store (dev offline fallback)
     const payment = await submitPaymentRecord(submission);
 
-    // 4. Record on Supabase server
+    // 5. Record in Supabase server (Postgres source of truth)
     if (isSupabaseConfigured()) {
       try {
-        const supabase = await createServerSupabaseClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        const { error: insertErr } = await supabase.from("payments").insert({
-          user_id: user?.id || null,
+        const serviceSupabase = createServiceClient();
+        const { error: insertErr } = await serviceSupabase.from("payments").insert({
+          user_id: authenticatedUserId,
           candidate_name: submission.candidateName,
           phone: submission.phone,
-          email: submission.email || user?.email || null,
+          email: submission.email || null,
           tx_ref: payment.txRef,
           bank_tx_ref: submission.bankTxRef,
           amount_etb: submission.amountETB,
           plan: submission.plan,
           method: submission.method,
-          status: "MANUAL_REVIEW",
+          status: "MANUAL_REVIEW", // Forced initial pending status
           receipt_image_url: submission.receiptImageUrl || null,
         });
 
@@ -126,23 +145,109 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * GET /api/payments/manual?txRef=...
+ * Owner-scoped single lookup by txRef only (authenticated).
+ * List mode is completely removed.
+ */
 export async function GET(req: NextRequest) {
+  // 1. Rate Limiting (30 status lookups per minute)
+  const rl = await enforceRateLimit(req, 30, 60, "pay_lookup");
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: "Too many payment lookup requests. Please slow down." },
+      { status: 429 }
+    );
+  }
+
   try {
     const txRef = req.nextUrl.searchParams.get("txRef");
-    const payments = getLocalPayments();
 
-    if (txRef) {
-      const match = payments.find((p) => p.txRef === txRef || p.bankTxRef === txRef);
-      if (!match) {
-        return NextResponse.json({ error: "Payment transaction not found." }, { status: 404 });
-      }
-      return NextResponse.json({ payment: match });
+    // List mode is forbidden: txRef is mandatory
+    if (!txRef || txRef.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Missing required parameter: txRef. List mode has been removed." },
+        { status: 400 }
+      );
     }
 
-    return NextResponse.json({ payments });
+    // Authentication is mandatory: only owner can inspect their payment
+    let user: { id: string } | null = null;
+    try {
+      const supabase = await createServerSupabaseClient();
+      const { data, error } = await supabase.auth.getUser();
+      if (!error && data?.user) {
+        user = data.user;
+      }
+    } catch {
+      // Auth check failure
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized: Active session required to view transaction details." },
+        { status: 401 }
+      );
+    }
+
+    // Query payment scoped to this user only
+    if (isSupabaseConfigured()) {
+      try {
+        const serviceClient = createServiceClient();
+        const { data, error } = await serviceClient
+          .from("payments")
+          .select("*")
+          .eq("user_id", user.id)
+          .or(`tx_ref.eq.${txRef.trim()},bank_tx_ref.eq.${txRef.trim()}`)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        if (data) {
+          return NextResponse.json({
+            payment: {
+              id: data.id,
+              userId: data.user_id,
+              candidateName: data.candidate_name,
+              phone: data.phone,
+              email: data.email,
+              txRef: data.tx_ref,
+              bankTxRef: data.bank_tx_ref,
+              amountETB: Number(data.amount_etb),
+              plan: data.plan,
+              method: data.method,
+              status: data.status,
+              receiptImageUrl: data.receipt_image_url,
+              createdAt: data.created_at,
+              reviewedAt: data.reviewed_at,
+            },
+          });
+        }
+      } catch (dbErr) {
+        console.warn("[Qelem] Supabase lookup error in GET /api/payments/manual:", dbErr);
+      }
+    }
+
+    // Dev offline store fallback (owner-scoped)
+    if (process.env.NODE_ENV !== "production") {
+      const payments = getLocalPayments();
+      const match = payments.find(
+        (p) => (p.txRef === txRef || p.bankTxRef === txRef) && (p.userId === user?.id || !p.userId)
+      );
+      if (match) {
+        return NextResponse.json({ payment: match });
+      }
+    }
+
+    return NextResponse.json(
+      { error: "Payment transaction not found." },
+      { status: 404 }
+    );
   } catch (error: any) {
     return NextResponse.json(
-      { error: "Failed to retrieve payments", details: error?.message },
+      { error: "Failed to retrieve payment record", details: error?.message },
       { status: 500 }
     );
   }

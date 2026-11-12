@@ -55,19 +55,17 @@ const INITIAL_DEMO_PAYMENTS: PaymentRecord[] = [
  * Returns all payment records from local store or merged with Supabase
  */
 export function getLocalPayments(): PaymentRecord[] {
-  if (typeof window === "undefined") return INITIAL_DEMO_PAYMENTS;
+  if (process.env.NODE_ENV === "production") return [];
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(PAYMENTS_STORAGE_KEY);
     if (!raw) {
-      if (process.env.NODE_ENV !== "production") {
-        localStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify(INITIAL_DEMO_PAYMENTS));
-        return INITIAL_DEMO_PAYMENTS;
-      }
-      return [];
+      localStorage.setItem(PAYMENTS_STORAGE_KEY, JSON.stringify(INITIAL_DEMO_PAYMENTS));
+      return INITIAL_DEMO_PAYMENTS;
     }
     return JSON.parse(raw);
   } catch {
-    return process.env.NODE_ENV !== "production" ? INITIAL_DEMO_PAYMENTS : [];
+    return [];
   }
 }
 
