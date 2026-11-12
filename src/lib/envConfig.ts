@@ -17,7 +17,6 @@ export function assertProductionConfig(): void {
     { key: "AUTH0_CLIENT_ID", value: process.env.AUTH0_CLIENT_ID },
     { key: "AUTH0_CLIENT_SECRET", value: process.env.AUTH0_CLIENT_SECRET },
     { key: "APP_BASE_URL", value: process.env.APP_BASE_URL },
-    { key: "ADMIN_SECRET_KEY", value: process.env.ADMIN_SECRET_KEY },
     { key: "NEXT_PUBLIC_SUPABASE_URL", value: process.env.NEXT_PUBLIC_SUPABASE_URL },
     { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", value: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY },
   ];

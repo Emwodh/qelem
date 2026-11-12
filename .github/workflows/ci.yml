@@ -10,6 +10,16 @@ jobs:
   verify:
     name: Type-Check, Test & Build
     runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      AUTH0_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      APP_BASE_URL: http://localhost:3000
+      AUTH0_DOMAIN: ci-test.auth0.com
+      AUTH0_CLIENT_ID: ci_test_client_id
+      AUTH0_CLIENT_SECRET: ci_test_client_secret
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci_placeholder_anon_key
+      SUPABASE_SERVICE_ROLE_KEY: ci_placeholder_service_role_key_for_testing
 
     steps:
       - name: Checkout source code
@@ -32,14 +42,3 @@ jobs:
 
       - name: Compile Next.js production build
         run: npm run build
-        env:
-          NEXT_TELEMETRY_DISABLED: 1
-          AUTH0_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          APP_BASE_URL: http://localhost:3000
-          AUTH0_DOMAIN: ci-test.auth0.com
-          AUTH0_CLIENT_ID: ci_test_client_id
-          AUTH0_CLIENT_SECRET: ci_test_client_secret
-          ADMIN_SECRET_KEY: ci_test_admin_secret_key_1234567890
-          ADMIN_SEED_SECRET: ci_test_admin_secret_key_1234567890
-          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci_placeholder_anon_key
