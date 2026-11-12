@@ -9,9 +9,10 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "type-check": "tsc --noEmit",
-    "test": "node scripts/verify-auth0-integration.mjs && node --experimental-strip-types scripts/test-admin-gate.mjs && node --experimental-strip-types scripts/test-exit-gate-0.mjs",
+    "test": "node scripts/verify-auth0-integration.mjs && node --experimental-strip-types scripts/test-admin-gate.mjs && node --experimental-strip-types scripts/test-exit-gate-0.mjs && node --experimental-strip-types scripts/test-rls.mjs",
     "test:admin": "node --experimental-strip-types scripts/test-admin-gate.mjs",
     "test:exit-gate": "node --experimental-strip-types scripts/test-exit-gate-0.mjs",
+    "test:rls": "node --experimental-strip-types scripts/test-rls.mjs",
     "test:auth": "node scripts/verify-auth0-integration.mjs"
   },
   "dependencies": {

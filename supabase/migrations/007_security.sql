@@ -4,13 +4,45 @@
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. Profiles: Ensure Server-Enforced Role Column Exists
+-- 1. Profiles: Ensure Server-Enforced Role Column Exists & Guard Against Self-Promotion
 -- ------------------------------------------------------------------------------
 ALTER TABLE public.profiles 
   ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'student' 
   CHECK (role IN ('student', 'admin', 'teacher'));
 
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
+
+-- Prevent unauthorized users from setting or altering their own role (self-promotion guard)
+CREATE OR REPLACE FUNCTION public.guard_profile_role()
+RETURNS TRIGGER AS $$
+BEGIN
+  -- Service role and postgres superuser can assign/change roles
+  IF auth.role() = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+
+  -- On INSERT, force role to 'student' regardless of client input
+  IF TG_OP = 'INSERT' THEN
+    NEW.role := 'student';
+    RETURN NEW;
+  END IF;
+
+  -- On UPDATE, reject any attempt by candidate to change role
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.role IS DISTINCT FROM OLD.role THEN
+      RAISE EXCEPTION 'Forbidden: users cannot modify their assigned role';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS trg_guard_profile_role ON public.profiles;
+CREATE TRIGGER trg_guard_profile_role
+  BEFORE INSERT OR UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.guard_profile_role();
+
 
 -- ------------------------------------------------------------------------------
 -- 2. Payments: Drop and Recreate Hardened RLS Policies & Triggers

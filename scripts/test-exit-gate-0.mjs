@@ -389,6 +389,36 @@ console.log("\n[Gate 0.6] Verifying Zero Backdoors & Secret Fallbacks in src/...
   console.log("  ✓ src/lib/auth0.ts fails closed with fatal error on missing AUTH0_SECRET.");
 }
 
+// ============================================================================
+// 7. Role Self-Promotion Protection (SQL & API Guard)
+// ============================================================================
+console.log("\n[Gate 0.7] Verifying Role Self-Promotion Protection...");
+
+{
+  const migrationSql = fs.readFileSync(
+    path.resolve("supabase/migrations/007_security.sql"),
+    "utf-8"
+  );
+
+  assert(
+    migrationSql.includes("CREATE OR REPLACE FUNCTION public.guard_profile_role()"),
+    "007_security.sql must define guard_profile_role function"
+  );
+  assert(
+    migrationSql.includes("RAISE EXCEPTION 'Forbidden: users cannot modify their assigned role'"),
+    "guard_profile_role must reject role modification by regular users"
+  );
+  assert(
+    migrationSql.includes("CREATE TRIGGER trg_guard_profile_role"),
+    "007_security.sql must create trg_guard_profile_role trigger on public.profiles"
+  );
+  assert(
+    migrationSql.includes("NEW.role := 'student'"),
+    "guard_profile_role must force new registrations to 'student' role"
+  );
+  console.log("  ✓ Database trigger trg_guard_profile_role blocks role self-promotion on INSERT and UPDATE.");
+}
+
 console.log("\n===============================================================");
 console.log("   ALL EXIT GATE 0 VERIFICATION TESTS PASSED SUCCESSFULLY!    ");
 console.log("===============================================================\n");
