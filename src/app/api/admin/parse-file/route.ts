@@ -1,39 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parsePlainTextQuestions } from "@/lib/questionStore";
 import { GradeLevel } from "@/types/curriculum";
-import { verifyAdminApiRequest } from "@/lib/adminAuth";
-import { auth0, isAuth0Configured } from "@/lib/auth0";
+import { verifyAdminRequest } from "@/lib/adminAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Admin Authorization Gate (x-admin-key or qelem_admin_token cookie)
-    const authCheck = verifyAdminApiRequest(req);
-    let isAuthorized = authCheck.authorized;
-
-    if (!isAuthorized && isAuth0Configured()) {
-      try {
-        const session = await auth0.getSession(req);
-        const user = session?.user;
-        if (
-          user &&
-          (user.role === "admin" ||
-            user["https://qelem.et/roles"]?.includes("admin") ||
-            user.user_metadata?.is_admin === true ||
-            (user.email && process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL))
-        ) {
-          isAuthorized = true;
-        }
-      } catch {
-        isAuthorized = false;
-      }
-    }
-
-    if (!isAuthorized) {
+    // 1. Admin Authorization Gate (Supabase session + role check)
+    const authCheck = await verifyAdminRequest(req);
+    if (!authCheck.authorized) {
       return NextResponse.json(
-        { error: authCheck.error || "Unauthorized: Admin privileges required" },
-        { status: 401 }
+        { error: authCheck.error || "Unauthorized: Administrator privileges required." },
+        { status: authCheck.status || 401 }
       );
     }
 

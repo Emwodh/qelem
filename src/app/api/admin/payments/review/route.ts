@@ -1,37 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updatePaymentStatus } from "@/lib/paymentStore";
-import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
-import { verifyAdminApiRequest } from "@/lib/adminAuth";
-import { auth0, isAuth0Configured } from "@/lib/auth0";
+import { createServiceClient } from "@/lib/supabase/server";
+import { verifyAdminRequest } from "@/lib/adminAuth";
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Admin Authorization Gate (x-admin-key or qelem_admin_token cookie)
-    const authCheck = verifyAdminApiRequest(req);
-    let isAuthorized = authCheck.authorized;
-
-    if (!isAuthorized && isAuth0Configured()) {
-      try {
-        const session = await auth0.getSession(req);
-        const user = session?.user;
-        if (
-          user &&
-          (user.role === "admin" ||
-            user["https://qelem.et/roles"]?.includes("admin") ||
-            user.user_metadata?.is_admin === true ||
-            (user.email && process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL))
-        ) {
-          isAuthorized = true;
-        }
-      } catch {
-        isAuthorized = false;
-      }
-    }
-
-    if (!isAuthorized) {
+    // 1. Admin Authorization Gate (Supabase session + role check)
+    const authCheck = await verifyAdminRequest(req);
+    if (!authCheck.authorized) {
       return NextResponse.json(
-        { error: authCheck.error || "Unauthorized: Admin privileges required." },
-        { status: 401 }
+        { error: authCheck.error || "Unauthorized: Administrator privileges required." },
+        { status: authCheck.status || 401 }
       );
     }
 
@@ -46,30 +25,49 @@ export async function POST(req: NextRequest) {
     }
 
     const newStatus = action === "approve" ? "COMPLETED" : "REJECTED";
+
+    // 2. Update status in Supabase if reachable
+    let supabaseRecord: any = null;
+    try {
+      const supabase = createServiceClient();
+      const { data, error } = await supabase
+        .from("payments")
+        .update({
+          status: newStatus,
+          admin_notes: adminNotes || null,
+          reviewed_at: new Date().toISOString(),
+        })
+        .or(`id.eq.${paymentId},tx_ref.eq.${paymentId}`)
+        .select()
+        .single();
+
+      if (!error && data) {
+        supabaseRecord = data;
+
+        // If approved and associated with a user, activate Pro subscription
+        if (newStatus === "COMPLETED" && data.user_id) {
+          await supabase
+            .from("profiles")
+            .update({
+              is_pro: true,
+              pro_plan: data.plan,
+              pro_activated_at: new Date().toISOString(),
+            })
+            .eq("id", data.user_id);
+        }
+      }
+    } catch (dbErr) {
+      console.warn("Could not sync payment review to Supabase:", dbErr);
+    }
+
+    // Also update local store for dev offline capability
     const updated = await updatePaymentStatus(paymentId, newStatus, adminNotes);
 
-    if (!updated) {
+    if (!updated && !supabaseRecord) {
       return NextResponse.json(
         { error: "Payment record not found." },
         { status: 404 }
       );
-    }
-
-    // 2. If approved and associated with a user, activate their Pro subscription in Supabase if reachable
-    if (newStatus === "COMPLETED" && updated.userId) {
-      try {
-        const supabase = await createServerSupabaseClient();
-        await supabase
-          .from("profiles")
-          .update({
-            is_pro: true,
-            pro_plan: updated.plan,
-            pro_activated_at: new Date().toISOString(),
-          })
-          .eq("id", updated.userId);
-      } catch (dbErr) {
-        console.warn("Could not sync Pro entitlement to Supabase profile:", dbErr);
-      }
     }
 
     return NextResponse.json({
@@ -78,7 +76,7 @@ export async function POST(req: NextRequest) {
         newStatus === "COMPLETED"
           ? "Payment verified and candidate upgraded to Pro."
           : "Payment rejected.",
-      payment: updated,
+      payment: supabaseRecord || updated,
     });
   } catch (err: any) {
     return NextResponse.json(

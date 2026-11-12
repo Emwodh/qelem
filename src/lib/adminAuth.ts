@@ -1,187 +1,140 @@
-import crypto from "node:crypto";
 import type { NextRequest } from "next/server";
-
-// 1. In-Memory Rate Limiting for Admin Verification (5 attempts / 15 minutes per IP)
-interface RateLimitRecord {
-  attempts: number;
-  resetAt: number;
-}
-
-const rateLimitMap = new Map<string, RateLimitRecord>();
-const MAX_ATTEMPTS = 5;
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-
-/**
- * Rate limits admin verification requests by client IP.
- * Note: Uses in-memory storage; across multi-instance serverless functions,
- * rate limits apply per container instance.
- */
-export function checkVerifyRateLimit(ip: string): {
-  allowed: boolean;
-  remaining: number;
-  retryAfterSec?: number;
-} {
-  const now = Date.now();
-  const cleanIp = ip || "unknown-client";
-  const record = rateLimitMap.get(cleanIp);
-
-  if (!record || now > record.resetAt) {
-    rateLimitMap.set(cleanIp, { attempts: 1, resetAt: now + WINDOW_MS });
-    return { allowed: true, remaining: MAX_ATTEMPTS - 1 };
-  }
-
-  if (record.attempts >= MAX_ATTEMPTS) {
-    const retryAfterSec = Math.max(1, Math.ceil((record.resetAt - now) / 1000));
-    return { allowed: false, remaining: 0, retryAfterSec };
-  }
-
-  record.attempts += 1;
-  return { allowed: true, remaining: MAX_ATTEMPTS - record.attempts };
-}
-
-export function resetVerifyRateLimit(ip: string): void {
-  rateLimitMap.delete(ip || "unknown-client");
-}
-
-/**
- * Timing-safe string equality check.
- * Pre-hashes both inputs with SHA-256 so buffers are guaranteed equal length (32 bytes),
- * preventing timing side-channel attacks on key length.
- */
-export function timingSafeCompare(a: string | undefined | null, b: string | undefined | null): boolean {
-  if (!a || !b) return false;
-  try {
-    const hashA = crypto.createHash("sha256").update(String(a)).digest();
-    const hashB = crypto.createHash("sha256").update(String(b)).digest();
-    return crypto.timingSafeEqual(hashA, hashB);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Validates a candidate passkey against ADMIN_SECRET_KEY.
- * Fails CLOSED if ADMIN_SECRET_KEY is missing or empty.
- */
-export function verifyAdminPasskey(candidate: string | undefined | null): boolean {
-  const adminSecret = process.env.ADMIN_SECRET_KEY;
-  if (!adminSecret || adminSecret.trim().length === 0) {
-    return false;
-  }
-  if (!candidate || typeof candidate !== "string") {
-    return false;
-  }
-  return timingSafeCompare(candidate.trim(), adminSecret.trim());
-}
-
-/**
- * Generates an HMAC-SHA256 signed session token for the admin cookie.
- * Token structure: Base64Url(issuedAt:expiresAt).HMACSignature
- * Max session duration: 2 hours (7200 seconds).
- */
-export function createAdminSessionToken(maxAgeSeconds = 7200): string {
-  const adminSecret = process.env.ADMIN_SECRET_KEY;
-  if (!adminSecret) {
-    throw new Error("Cannot create admin session token: ADMIN_SECRET_KEY is not set.");
-  }
-
-  const now = Date.now();
-  const expiresAt = now + maxAgeSeconds * 1000;
-  const payload = `${now}:${expiresAt}`;
-  const payloadB64 = Buffer.from(payload, "utf8").toString("base64url");
-  const signature = crypto
-    .createHmac("sha256", adminSecret)
-    .update(payloadB64)
-    .digest("hex");
-
-  return `${payloadB64}.${signature}`;
-}
-
-/**
- * Verifies an HMAC-signed admin session token.
- * Validates signature, expiry, and structure.
- */
-export function verifyAdminSessionToken(token: string | undefined | null): boolean {
-  if (!token || typeof token !== "string") return false;
-
-  const adminSecret = process.env.ADMIN_SECRET_KEY;
-  if (!adminSecret || adminSecret.trim().length === 0) return false;
-
-  const parts = token.split(".");
-  if (parts.length !== 2) return false;
-
-  const [payloadB64, providedSig] = parts;
-
-  // Validate signature using timing-safe comparison
-  const expectedSig = crypto
-    .createHmac("sha256", adminSecret)
-    .update(payloadB64)
-    .digest("hex");
-
-  if (!timingSafeCompare(providedSig, expectedSig)) {
-    return false;
-  }
-
-  // Parse and validate expiration
-  try {
-    const rawPayload = Buffer.from(payloadB64, "base64url").toString("utf8");
-    const [issuedAtStr, expiresAtStr] = rawPayload.split(":");
-    const expiresAt = Number(expiresAtStr);
-    if (!expiresAt || isNaN(expiresAt)) return false;
-
-    if (Date.now() > expiresAt) {
-      return false; // Token expired
-    }
-
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { createServerClient } from "@supabase/ssr";
 
 /**
  * Validates whether an incoming HTTP request is authorized for administrative endpoints.
- * Checks (in order):
- * 1. `x-admin-key` header (timing-safe check against ADMIN_SECRET_KEY)
- * 2. `qelem_admin_token` cookie (verified HMAC token)
+ * Admin auth = Supabase session + database role check ('admin') in profiles table.
+ * 
+ * Rules:
+ * 1. Must have valid Supabase session (from cookie or Bearer token).
+ * 2. Reject client-controllable user_metadata.is_admin (admin must be server-verified).
+ * 3. Query profiles.role with service role key: if profile?.role !== 'admin', fail closed (403).
+ * 4. Fails closed if Supabase or environment is unconfigured.
  */
-export function verifyAdminApiRequest(request: Request | NextRequest): {
+export async function verifyAdminRequest(
+  request: Request | NextRequest
+): Promise<{
   authorized: boolean;
+  status: number;
   error?: string;
-  authMethod?: "header" | "cookie";
-} {
-  const adminSecret = process.env.ADMIN_SECRET_KEY;
-  if (!adminSecret || adminSecret.trim().length === 0) {
+  user?: { id: string; email?: string; role?: string };
+}> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !anonKey) {
     return {
       authorized: false,
-      error: "ADMIN_SECRET_KEY is not configured on the server. Access denied (fail closed).",
+      status: 500,
+      error: "Supabase configuration missing on server (fail-closed).",
     };
   }
 
-  // 1. Check x-admin-key header
-  const headerKey = request.headers.get("x-admin-key");
-  if (headerKey && verifyAdminPasskey(headerKey)) {
-    return { authorized: true, authMethod: "header" };
-  }
+  // 1. Extract Bearer token or cookies
+  let user: { id: string; email?: string } | null = null;
 
-  // 2. Check qelem_admin_token cookie
-  let tokenCookie: string | undefined;
-  if ("cookies" in request && typeof request.cookies?.get === "function") {
-    tokenCookie = request.cookies.get("qelem_admin_token")?.value;
-  } else {
-    const cookieHeader = request.headers.get("cookie") || "";
-    const match = cookieHeader.match(/qelem_admin_token=([^;]+)/);
-    if (match) {
-      tokenCookie = decodeURIComponent(match[1]);
+  try {
+    const authHeader = request.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7).trim();
+      // Service role key passed directly by trusted internal backend / CLI
+      if (serviceKey && token === serviceKey) {
+        return {
+          authorized: true,
+          status: 200,
+          user: { id: "service_role", role: "admin" },
+        };
+      }
+
+      // Verify JWT with Supabase
+      const authClient = createServerClient(supabaseUrl, anonKey, {
+        cookies: { getAll: () => [], setAll: () => {} },
+      });
+      const { data, error } = await authClient.auth.getUser(token);
+      if (!error && data?.user) {
+        user = data.user;
+      }
     }
+
+    // If no bearer user, check cookies
+    if (!user) {
+      let cookiesList: { name: string; value: string }[] = [];
+      if ("cookies" in request && typeof (request as NextRequest).cookies?.getAll === "function") {
+        cookiesList = (request as NextRequest).cookies.getAll();
+      } else {
+        const cookieHeader = request.headers.get("cookie") || "";
+        cookiesList = cookieHeader
+          .split(";")
+          .filter(Boolean)
+          .map((c) => {
+            const [name, ...val] = c.trim().split("=");
+            return { name, value: val.join("=") };
+          });
+      }
+
+      const cookieClient = createServerClient(supabaseUrl, anonKey, {
+        cookies: {
+          getAll: () => cookiesList,
+          setAll: () => {},
+        },
+      });
+
+      const { data, error } = await cookieClient.auth.getUser();
+      if (!error && data?.user) {
+        user = data.user;
+      }
+    }
+  } catch {
+    return {
+      authorized: false,
+      status: 401,
+      error: "Failed to verify session token.",
+    };
   }
 
-  if (tokenCookie && verifyAdminSessionToken(tokenCookie)) {
-    return { authorized: true, authMethod: "cookie" };
+  if (!user) {
+    return {
+      authorized: false,
+      status: 401,
+      error: "Unauthorized: Active Supabase session required.",
+    };
   }
 
-  return {
-    authorized: false,
-    error: "Unauthorized: Valid administrator passkey or session token required.",
-  };
+  // Reject user.user_metadata.is_admin! Client metadata is untrusted.
+  // Query server database profiles table for role
+  try {
+    const queryClient = createServerClient(supabaseUrl, serviceKey || anonKey, {
+      cookies: { getAll: () => [], setAll: () => {} },
+    });
+
+    const { data: profile, error: profileErr } = await queryClient
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profileErr || !profile || profile.role !== "admin") {
+      return {
+        authorized: false,
+        status: 403,
+        error: "Forbidden: Administrator role required. Account is not an administrator.",
+      };
+    }
+
+    return {
+      authorized: true,
+      status: 200,
+      user: { id: user.id, email: user.email, role: profile.role },
+    };
+  } catch {
+    return {
+      authorized: false,
+      status: 403,
+      error: "Forbidden: Server role verification failed (fail closed).",
+    };
+  }
 }
+
+// Alias for backwards compatibility
+export const verifyAdminApiRequest = verifyAdminRequest;

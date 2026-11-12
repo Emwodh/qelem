@@ -67,14 +67,11 @@ export default function AdminPaymentsPage() {
   // Fetch payments
   const fetchPayments = async () => {
     setIsLoading(true);
-    const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("qelem_admin_key") : null;
     try {
-      const res = await fetch("/api/admin/payments", {
-        headers: adminKey ? { "x-admin-key": adminKey } : {},
-      });
+      const res = await fetch("/api/admin/payments");
       if (res.ok) {
         const data = await res.json();
-        if (data?.payments && Array.isArray(data.payments) && data.payments.length > 0) {
+        if (data?.payments && Array.isArray(data.payments)) {
           setPayments(data.payments);
           setIsLoading(false);
           return;
@@ -83,7 +80,11 @@ export default function AdminPaymentsPage() {
     } catch {
       // Local fallback
     }
-    setPayments(getLocalPayments());
+    if (process.env.NODE_ENV !== "production") {
+      setPayments(getLocalPayments());
+    } else {
+      setPayments([]);
+    }
     setIsLoading(false);
   };
 
@@ -99,8 +100,6 @@ export default function AdminPaymentsPage() {
   // 1. Single Approve / Reject
   const handleReview = async (paymentId: string, action: "approve" | "reject", notes?: string) => {
     setProcessingId(paymentId);
-    const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("qelem_admin_key") : "";
-
     const targetPayment = payments.find((p) => p.id === paymentId || p.txRef === paymentId);
 
     try {
@@ -108,7 +107,6 @@ export default function AdminPaymentsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-key": adminKey || "",
         },
         body: JSON.stringify({
           paymentId,

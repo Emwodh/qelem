@@ -1,17 +1,40 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth0, isAuth0Configured } from "@/lib/auth0";
-import { verifyAdminApiRequest } from "@/lib/adminAuth";
-import { assertProductionConfig } from "@/lib/envConfig";
-
-let hasWarnedAuth0Dev = false;
+import { verifyAdminRequest } from "@/lib/adminAuth";
+import { env } from "@/lib/env";
 
 export async function proxy(request: NextRequest) {
-  // 0. Verify production environment integrity
-  assertProductionConfig();
-
+  void env;
   const pathname = request.nextUrl.pathname;
 
-  // 1. Delegate /auth/* routes directly to the Auth0 SDK if configured
+  // 1. Enforce Admin Protection for /api/admin/* routes
+  if (pathname.startsWith("/api/admin")) {
+    const adminCheck = await verifyAdminRequest(request);
+    if (!adminCheck.authorized) {
+      return NextResponse.json(
+        { error: adminCheck.error || "Unauthorized: Administrator privileges required." },
+        { status: adminCheck.status || 401 }
+      );
+    }
+  }
+
+  // 2. Enforce Admin Protection for /admin/* pages
+  if (pathname.startsWith("/admin")) {
+    const adminCheck = await verifyAdminRequest(request);
+    if (!adminCheck.authorized) {
+      if (adminCheck.status === 401) {
+        const loginUrl = new URL("/auth/login", request.url);
+        loginUrl.searchParams.set("returnTo", pathname);
+        return NextResponse.redirect(loginUrl);
+      }
+      return new NextResponse(
+        "Forbidden: Administrator privileges required.",
+        { status: 403, headers: { "Content-Type": "text/plain" } }
+      );
+    }
+  }
+
+  // 3. Delegate /auth/* routes directly to the Auth0 SDK if configured
   if (pathname.startsWith("/auth")) {
     if (!isAuth0Configured()) {
       if (process.env.NODE_ENV === "production") {
@@ -34,7 +57,7 @@ export async function proxy(request: NextRequest) {
     return await auth0.middleware(request);
   }
 
-  // 2. Redirect legacy /login and /signup routes to Auth0
+  // 4. Redirect legacy /login and /signup routes to Auth0
   if (pathname === "/login") {
     const returnTo =
       request.nextUrl.searchParams.get("redirect") ||
@@ -56,7 +79,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(signupUrl);
   }
 
-  // 3. Process request with Auth0 middleware for session cookie management if configured
+  // 5. Process request with Auth0 middleware for session cookie management if configured
   let response = NextResponse.next({ request });
   if (isAuth0Configured()) {
     try {
@@ -64,49 +87,6 @@ export async function proxy(request: NextRequest) {
     } catch (err) {
       console.warn("Auth0 middleware error; passing through request:", err);
       response = NextResponse.next({ request });
-    }
-  } else if (process.env.NODE_ENV !== "production" && !hasWarnedAuth0Dev) {
-    console.warn(
-      "[Qelem Dev] Auth0 environment variables not configured in .env.local; skipping Auth0 session middleware in development."
-    );
-    hasWarnedAuth0Dev = true;
-  }
-
-  // 4. Admin API Route Protection
-  const isProtectedAdminApi =
-    pathname.startsWith("/api/admin") && pathname !== "/api/admin/verify";
-
-  if (isProtectedAdminApi) {
-    // Check timing-safe passkey or HMAC session token
-    const authCheck = verifyAdminApiRequest(request);
-    let isAuthorized = authCheck.authorized;
-
-    // Secondary check: Auth0 administrator role claims if configured
-    if (!isAuthorized && isAuth0Configured()) {
-      try {
-        const session = await auth0.getSession(request);
-        const user = session?.user ?? null;
-        if (
-          user &&
-          (user.role === "admin" ||
-            user["https://qelem.et/roles"]?.includes("admin") ||
-            user.user_metadata?.is_admin === true ||
-            (user.email &&
-              process.env.ADMIN_EMAIL &&
-              user.email === process.env.ADMIN_EMAIL))
-        ) {
-          isAuthorized = true;
-        }
-      } catch {
-        isAuthorized = false;
-      }
-    }
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { error: authCheck.error || "Unauthorized: Admin privileges required" },
-        { status: 401 }
-      );
     }
   }
 

@@ -86,8 +86,7 @@ export default function AdminSidebar({
 
   const handleLockAdminSession = () => {
     if (typeof window !== "undefined") {
-      sessionStorage.removeItem("qelem_admin_key");
-      window.location.href = "/admin";
+      window.location.href = "/auth/logout";
     }
   };
 

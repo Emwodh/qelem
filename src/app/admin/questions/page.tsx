@@ -248,10 +248,8 @@ export default function AdminQuestionsPage() {
     formData.append("difficulty", difficulty);
 
     try {
-      const adminKey = typeof window !== "undefined" ? sessionStorage.getItem("qelem_admin_key") || "" : "";
       const res = await fetch("/api/admin/parse-file", {
         method: "POST",
-        headers: { "x-admin-key": adminKey },
         body: formData,
       });
 
