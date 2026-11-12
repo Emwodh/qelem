@@ -3,17 +3,22 @@ import { cookies } from "next/headers";
 
 /**
  * Creates an SSR-compatible Supabase client for Server Components and Route Handlers.
- * In Next.js 15, cookies() is asynchronous and resolved before initializing the client.
+ * In Next.js 15/16, cookies() is asynchronous and resolved before initializing the client.
+ * Fails closed if credentials are missing.
  */
 export async function createClient() {
   const cookieStore = await cookies();
 
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder-project.supabase.co";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey =
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key_for_qelem_matric_prep";
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      "Missing Supabase credentials: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be defined."
+    );
+  }
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
     cookies: {
@@ -30,6 +35,29 @@ export async function createClient() {
           // Ignored if middleware refreshes candidate sessions.
         }
       },
+    },
+  });
+}
+
+/**
+ * Creates a server client with the service role key for administrative operations.
+ */
+export function createServiceClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error(
+      "Missing Supabase service role credentials: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be defined."
+    );
+  }
+
+  return createServerClient(supabaseUrl, serviceRoleKey, {
+    cookies: {
+      getAll() {
+        return [];
+      },
+      setAll() {},
     },
   });
 }
